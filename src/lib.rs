@@ -1006,7 +1006,7 @@ where
     fn as_string<U: fmt::Display>(&'a self, data: U) -> DocBuilder<'a, Self, A> {
         use std::fmt::Write;
         let mut buf = FmtText::Small(SmallText::new());
-        write!(buf, "{}", data).unwrap();
+        write!(buf, "{data}").unwrap();
         let doc = match buf {
             FmtText::Small(b) => Doc::SmallText(b),
             FmtText::Large(b) => Doc::OwnedText(b.into()),
@@ -1587,7 +1587,7 @@ impl<A> Clone for RefDoc<'_, A> {
     }
 }
 
-impl<'a, A> fmt::Debug for RefDoc<'a, A>
+impl<A> fmt::Debug for RefDoc<'_, A>
 where
     A: fmt::Debug,
 {
@@ -2072,7 +2072,7 @@ mod tests {
                 .append(BoxDoc::text("test")),
         );
 
-        test!(usize::max_value(), doc, "test test");
+        test!(usize::MAX, doc, "test test");
     }
 
     #[test]

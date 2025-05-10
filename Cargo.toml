@@ -8,7 +8,7 @@ keywords = ["console", "functional", "pretty-printing"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/typstyle-rs/prettyless"
-edition = "2018"
+edition = "2021"
 
 [package.metadata.docs.rs]
 features = ["termcolor"]
@@ -19,10 +19,10 @@ features = ["termcolor"]
 arrayvec = "0.5"
 typed-arena = "2.0.0"
 termcolor = { version = "1.1.0", optional = true }
-unicode-width = "0.1"
+unicode-width = "0.2"
 
 [dev-dependencies]
-criterion = "0.4"
+criterion = "0.6"
 difference = "2"
 expect-test = "1"
 tempfile = "3.1.0"
