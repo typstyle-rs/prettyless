@@ -8,7 +8,7 @@ use termcolor::{ColorSpec, WriteColor};
 
 use crate::{Doc, DocPtr};
 
-use fit::best;
+use fit::print_doc;
 pub use write::{FmtWrite, IoWrite, RenderAnnotated};
 
 pub struct PrettyFmt<'a, 'd, T, A>
@@ -58,7 +58,7 @@ where
         for<'b> W: RenderAnnotated<'b, A>,
         W: ?Sized,
     {
-        best(self, width, out)
+        print_doc(self, width, out)
     }
 
     /// Returns a value which implements `std::fmt::Display`
@@ -86,7 +86,7 @@ where
     where
         W: WriteColor,
     {
-        best(self, width, &mut write::TermColored::new(out))
+        print_doc(self, width, &mut write::TermColored::new(out))
     }
 }
 
