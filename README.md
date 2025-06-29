@@ -1,9 +1,11 @@
-# pretty.rs
+# prettyless
 
-[![build](https://github.com/Marwes/pretty.rs/actions/workflows/build.yml/badge.svg)](https://github.com/Marwes/pretty.rs/actions/workflows/build.yml)
-[![Docs](https://docs.rs/pretty/badge.svg)](https://docs.rs/pretty)
+[![build](https://github.com/typstyle-rs/prettyless/actions/workflows/build.yml/badge.svg)](https://github.com/typstyle-rs/prettyless/actions/workflows/build.yml)
+[![Docs](https://docs.rs/prettyless/badge.svg)](https://docs.rs/prettyless)
 
 Pretty printing combinators for Rust
+
+This is an unofficial forked version of [pretty.rs](https://github.com/Marwes/pretty.rs) by @Marwes, branched from v0.12.4. We extend it with more features used in [typstyle](https://github.com/typstyle-rs/typstyle), a code formatter for [Typst](https://typst.app/). The correctness of modifications are partly guaranteed by the testsuite of typstyle.
 
 ## Synopsis
 
@@ -23,23 +25,23 @@ See the generated API documentation [here](https://docs.rs/pretty).
 
 ## Requirements
 
-1.   [Rust](https://www.rust-lang.org/)
-2.   [Cargo](https://crates.io/)
+1. [Rust](https://www.rust-lang.org/)
+2. [Cargo](https://crates.io/)
 
 You can install both with the following:
 
-```
-$ curl -s https://static.rust-lang.org/rustup.sh | sudo sh
+```bash
+curl -s https://static.rust-lang.org/rustup.sh | sudo sh
 ```
 
 See [Installation](https://doc.rust-lang.org/book/ch01-01-installation.html) for further details.
 
 ## Usage
 
-```
-$ cargo build                                          ## build library and binary
-$ cargo run --example trees                            ## run the example (pretty trees)
-$ cargo run --example colored --features termcolor     ## run the example (pretty colored output)
-$ cargo bench                                          ## run benchmarks
-$ cargo test                                           ## run tests
+```bash
+cargo build                                          ## build library and binary
+cargo run --example trees                            ## run the example (pretty trees)
+cargo run --example colored --features termcolor     ## run the example (pretty colored output)
+cargo bench                                          ## run benchmarks
+cargo test                                           ## run tests
 ```

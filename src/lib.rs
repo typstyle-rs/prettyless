@@ -1,3 +1,8 @@
+//! # prettyless (a fork of pretty.rs)
+//!
+//! Original work Copyright (c) 2014 Jonathan Sterling and Darin Morrison
+//! Modifications Copyright (c) 2025 QuadnucYard
+//!
 //! This crate defines a
 //! [Wadler-style](http://homepages.inf.ed.ac.uk/wadler/papers/prettier/prettier.pdf)
 //! pretty-printing API.
