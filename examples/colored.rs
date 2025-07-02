@@ -1,5 +1,5 @@
-use pretty::termcolor::{Color, ColorChoice, ColorSpec, StandardStream};
-use pretty::{Arena, DocAllocator};
+use prettyless::termcolor::{Color, ColorChoice, ColorSpec, StandardStream};
+use prettyless::{Arena, DocAllocator};
 
 fn main() {
     let arena = Arena::new();

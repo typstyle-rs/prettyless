@@ -1,4 +1,4 @@
-use pretty::{BoxAllocator, DocAllocator, DocBuilder};
+use prettyless::{BoxAllocator, DocAllocator, DocBuilder};
 use std::io;
 use std::str;
 

@@ -1,5 +1,5 @@
 [package]
-name = "pretty"
+name = "prettyless"
 version = "0.1.0"
 authors = ["QuadnucYard <quadnucyard@gmail.com>"]
 description = "Wadler-style pretty-printing combinators in Rust with more features."

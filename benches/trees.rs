@@ -3,7 +3,7 @@ use std::io;
 use criterion::{criterion_group, criterion_main, Bencher, Criterion};
 
 use crate::trees::Tree;
-use pretty::{Arena, BoxAllocator};
+use prettyless::{Arena, BoxAllocator};
 
 #[path = "../examples/trees.rs"]
 mod trees;

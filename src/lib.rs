@@ -28,7 +28,7 @@
 //! symbolic expression children.
 //!
 //! ```rust
-//! # use pretty::*;
+//! # use prettyless::*;
 //! enum SExp {
 //!     Atom(u32),
 //!     List(Vec<SExp>),
@@ -42,7 +42,7 @@
 //! [nested]() and [grouped](), allowing them to be laid out in a single line as appropriate.
 //!
 //! ```rust
-//! # use pretty::*;
+//! # use prettyless::*;
 //! # enum SExp {
 //! #     Atom(u32),
 //! #     List(Vec<SExp>),
@@ -66,7 +66,7 @@
 //! Next, we convert the [Doc](enum.Doc.html) to a plain old string.
 //!
 //! ```rust
-//! # use pretty::*;
+//! # use prettyless::*;
 //! # enum SExp {
 //! #     Atom(u32),
 //! #     List(Vec<SExp>),
@@ -97,7 +97,7 @@
 //! And finally we can test that the nesting and grouping behaves as we expected.
 //!
 //! ```rust
-//! # use pretty::*;
+//! # use prettyless::*;
 //! # enum SExp {
 //! #     Atom(u32),
 //! #     List(Vec<SExp>),
@@ -668,7 +668,7 @@ where
     /// Returns a value which implements `std::fmt::Display`
     ///
     /// ```
-    /// use pretty::{Doc, BoxDoc};
+    /// use prettyless::{Doc, BoxDoc};
     /// let doc = BoxDoc::<()>::group(
     ///     BoxDoc::text("hello").append(Doc::line()).append(Doc::text("world"))
     /// );
@@ -965,7 +965,7 @@ where
     /// Acts like `line` but behaves like `nil` if grouped on a single line
     ///
     /// ```
-    /// use pretty::{Doc, RcDoc};
+    /// use prettyless::{Doc, RcDoc};
     ///
     /// let doc = RcDoc::<()>::group(
     ///     RcDoc::text("(")
@@ -1073,9 +1073,9 @@ where
     /// Allocate a document that acts differently based on the position and page layout
     ///
     /// ```rust
-    /// use pretty::DocAllocator;
+    /// use prettyless::DocAllocator;
     ///
-    /// let arena = pretty::Arena::<()>::new();
+    /// let arena = prettyless::Arena::<()>::new();
     /// let doc = arena.text("prefix ")
     ///     .append(arena.column(|l| {
     ///         arena.text("| <- column ").append(arena.as_string(l)).into_doc()
@@ -1090,9 +1090,9 @@ where
     /// Allocate a document that acts differently based on the current nesting level
     ///
     /// ```rust
-    /// use pretty::DocAllocator;
+    /// use prettyless::DocAllocator;
     ///
-    /// let arena = pretty::Arena::<()>::new();
+    /// let arena = prettyless::Arena::<()>::new();
     /// let doc = arena.text("prefix ")
     ///     .append(arena.nesting(|l| {
     ///         arena.text("[Nested: ").append(arena.as_string(l)).append("]").into_doc()
@@ -1229,7 +1229,7 @@ where
 /// `Pretty` trait, like `&str`)
 ///
 /// ```
-/// use pretty::{docs, Arena, DocAllocator};
+/// use prettyless::{docs, Arena, DocAllocator};
 /// let arena = &Arena::<()>::new();
 /// let doc = docs![
 ///     arena,
@@ -1308,7 +1308,7 @@ where
     /// Acts as `self` when laid out on multiple lines and acts as `that` when laid out on a single line.
     ///
     /// ```
-    /// use pretty::{Arena, DocAllocator};
+    /// use prettyless::{Arena, DocAllocator};
     ///
     /// let arena = Arena::<()>::new();
     /// let body = arena.line().append("x");
@@ -1405,9 +1405,9 @@ where
     /// like `RefDoc` or `RcDoc`
     ///
     /// ```rust
-    /// use pretty::{docs, DocAllocator};
+    /// use prettyless::{docs, DocAllocator};
     ///
-    /// let arena = &pretty::Arena::<()>::new();
+    /// let arena = &prettyless::Arena::<()>::new();
     /// let doc = docs![
     ///     arena,
     ///     "lorem",
@@ -1438,9 +1438,9 @@ where
     /// like `RefDoc` or `RcDoc`
     ///
     /// ```rust
-    /// use pretty::DocAllocator;
+    /// use prettyless::DocAllocator;
     ///
-    /// let arena = pretty::Arena::<()>::new();
+    /// let arena = prettyless::Arena::<()>::new();
     /// let doc = arena.text("prefix").append(arena.text(" "))
     ///     .append(arena.reflow("Indenting these words with nest").hang(4));
     /// assert_eq!(
@@ -1462,9 +1462,9 @@ where
     /// like `RefDoc` or `RcDoc`
     ///
     /// ```rust
-    /// use pretty::DocAllocator;
+    /// use prettyless::DocAllocator;
     ///
-    /// let arena = pretty::Arena::<()>::new();
+    /// let arena = prettyless::Arena::<()>::new();
     /// let doc = arena.text("prefix").append(arena.text(" "))
     ///     .append(arena.reflow("The indent function indents these words!").indent(4));
     /// assert_eq!(
@@ -1502,9 +1502,9 @@ where
     /// like `RefDoc` or `RcDoc`
     ///
     /// ```rust
-    /// use pretty::DocAllocator;
+    /// use prettyless::DocAllocator;
     ///
-    /// let arena = pretty::Arena::<()>::new();
+    /// let arena = prettyless::Arena::<()>::new();
     /// let doc = arena.text("prefix ")
     ///     .append(arena.column(|l| {
     ///         arena.text("| <- column ").append(arena.as_string(l)).into_doc()
