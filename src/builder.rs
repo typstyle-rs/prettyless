@@ -8,14 +8,13 @@ use crate::{BuildDoc, Doc, DocAllocator, Pretty};
 
 /// The `DocBuilder` type allows for convenient appending of documents even for arena allocated
 /// documents by storing the arena inline.
-pub struct DocBuilder<'a, D, A = ()>(pub &'a D, pub BuildDoc<'a, D::Doc, A>)
+pub struct DocBuilder<'a, D>(pub &'a D, pub BuildDoc<'a, D::Doc>)
 where
-    D: ?Sized + DocAllocator<'a, A>;
+    D: ?Sized + DocAllocator<'a>;
 
-impl<'a, D, A> DocBuilder<'a, D, A>
+impl<'a, D> DocBuilder<'a, D>
 where
-    A: 'a,
-    D: ?Sized + DocAllocator<'a, A>,
+    D: ?Sized + DocAllocator<'a>,
 {
     pub(crate) fn with_utf8_len(self) -> Self {
         let s = match &*self {
@@ -40,9 +39,9 @@ where
 
     /// Append the given document after this document.
     #[inline]
-    pub fn append<E>(self, that: E) -> DocBuilder<'a, D, A>
+    pub fn append<E>(self, that: E) -> DocBuilder<'a, D>
     where
-        E: Pretty<'a, D, A>,
+        E: Pretty<'a, D>,
     {
         let DocBuilder(allocator, _) = self;
         let that = that.pretty(allocator);
@@ -65,7 +64,7 @@ where
     /// ```
     /// use prettyless::{Arena, DocAllocator};
     ///
-    /// let arena = Arena::<()>::new();
+    /// let arena = Arena::new();
     /// let body = arena.line().append("x");
     /// let doc = arena.text("let")
     ///     .append(arena.line())
@@ -85,9 +84,9 @@ where
     /// assert_eq!(doc.1.pretty(8).to_string(), "let x\nx");
     /// ```
     #[inline]
-    pub fn flat_alt<E>(self, that: E) -> DocBuilder<'a, D, A>
+    pub fn flat_alt<E>(self, that: E) -> DocBuilder<'a, D>
     where
-        E: Pretty<'a, D, A>,
+        E: Pretty<'a, D>,
     {
         let DocBuilder(allocator, this) = self;
         let that = that.pretty(allocator);
@@ -104,7 +103,7 @@ where
     /// horizontally and combined into a one single line, or they are each layed out on their own
     /// line.
     #[inline]
-    pub fn group(self) -> DocBuilder<'a, D, A> {
+    pub fn group(self) -> DocBuilder<'a, D> {
         match *self.1 {
             Doc::Group(_)
             | Doc::OwnedText(_)
@@ -120,7 +119,7 @@ where
 
     /// Increase the indentation level of this document.
     #[inline]
-    pub fn nest(self, offset: isize) -> DocBuilder<'a, D, A> {
+    pub fn nest(self, offset: isize) -> DocBuilder<'a, D> {
         if let Doc::Nil = &*self.1 {
             return self;
         }
@@ -135,18 +134,9 @@ where
     }
 
     #[inline]
-    pub fn annotate(self, ann: A) -> DocBuilder<'a, D, A> {
-        let DocBuilder(allocator, this) = self;
-        DocBuilder(
-            allocator,
-            Doc::Annotated(ann, allocator.alloc_cow(this)).into(),
-        )
-    }
-
-    #[inline]
-    pub fn union<E>(self, other: E) -> DocBuilder<'a, D, A>
+    pub fn union<E>(self, other: E) -> DocBuilder<'a, D>
     where
-        E: Into<BuildDoc<'a, D::Doc, A>>,
+        E: Into<BuildDoc<'a, D::Doc>>,
     {
         let DocBuilder(allocator, this) = self;
         let other = other.into();
@@ -162,7 +152,7 @@ where
     /// ```rust
     /// use prettyless::{docs, DocAllocator};
     ///
-    /// let arena = &prettyless::Arena::<()>::new();
+    /// let arena = &prettyless::Arena::new();
     /// let doc = docs![
     ///     arena,
     ///     "lorem",
@@ -174,9 +164,9 @@ where
     /// assert_eq!(doc.1.pretty(80).to_string(), "lorem ipsum\n      dolor\nnext");
     /// ```
     #[inline]
-    pub fn align(self) -> DocBuilder<'a, D, A>
+    pub fn align(self) -> DocBuilder<'a, D>
     where
-        DocBuilder<'a, D, A>: Clone,
+        DocBuilder<'a, D>: Clone,
     {
         let allocator = self.0;
         allocator.column(move |col| {
@@ -195,7 +185,7 @@ where
     /// ```rust
     /// use prettyless::DocAllocator;
     ///
-    /// let arena = prettyless::Arena::<()>::new();
+    /// let arena = prettyless::Arena::new();
     /// let doc = arena.text("prefix").append(arena.text(" "))
     ///     .append(arena.reflow("Indenting these words with nest").hang(4));
     /// assert_eq!(
@@ -204,9 +194,9 @@ where
     /// );
     /// ```
     #[inline]
-    pub fn hang(self, adjust: isize) -> DocBuilder<'a, D, A>
+    pub fn hang(self, adjust: isize) -> DocBuilder<'a, D>
     where
-        DocBuilder<'a, D, A>: Clone,
+        DocBuilder<'a, D>: Clone,
     {
         self.nest(adjust).align()
     }
@@ -219,7 +209,7 @@ where
     /// ```rust
     /// use prettyless::DocAllocator;
     ///
-    /// let arena = prettyless::Arena::<()>::new();
+    /// let arena = prettyless::Arena::new();
     /// let doc = arena.text("prefix").append(arena.text(" "))
     ///     .append(arena.reflow("The indent function indents these words!").indent(4));
     /// assert_eq!(
@@ -232,9 +222,9 @@ where
     /// );
     /// ```
     #[inline]
-    pub fn indent(self, adjust: usize) -> DocBuilder<'a, D, A>
+    pub fn indent(self, adjust: usize) -> DocBuilder<'a, D>
     where
-        DocBuilder<'a, D, A>: Clone,
+        DocBuilder<'a, D>: Clone,
     {
         let spaces = {
             use crate::render::SPACES;
@@ -259,7 +249,7 @@ where
     /// ```rust
     /// use prettyless::DocAllocator;
     ///
-    /// let arena = prettyless::Arena::<()>::new();
+    /// let arena = prettyless::Arena::new();
     /// let doc = arena.text("prefix ")
     ///     .append(arena.column(|l| {
     ///         arena.text("| <- column ").append(arena.as_string(l)).into_doc()
@@ -267,9 +257,9 @@ where
     /// assert_eq!(doc.1.pretty(80).to_string(), "prefix | <- column 7");
     /// ```
     #[inline]
-    pub fn width(self, f: impl Fn(isize) -> D::Doc + 'a) -> DocBuilder<'a, D, A>
+    pub fn width(self, f: impl Fn(isize) -> D::Doc + 'a) -> DocBuilder<'a, D>
     where
-        BuildDoc<'a, D::Doc, A>: Clone,
+        BuildDoc<'a, D::Doc>: Clone,
     {
         let DocBuilder(allocator, this) = self;
         let f = allocator.alloc_width_fn(f);
@@ -284,10 +274,10 @@ where
 
     /// Puts `self` between `before` and `after`
     #[inline]
-    pub fn enclose<E, F>(self, before: E, after: F) -> DocBuilder<'a, D, A>
+    pub fn enclose<E, F>(self, before: E, after: F) -> DocBuilder<'a, D>
     where
-        E: Pretty<'a, D, A>,
-        F: Pretty<'a, D, A>,
+        E: Pretty<'a, D>,
+        F: Pretty<'a, D>,
     {
         let DocBuilder(allocator, _) = self;
         DocBuilder(allocator, before.pretty(allocator).1)
@@ -295,25 +285,25 @@ where
             .append(after)
     }
 
-    pub fn single_quotes(self) -> DocBuilder<'a, D, A> {
+    pub fn single_quotes(self) -> DocBuilder<'a, D> {
         self.enclose("'", "'")
     }
 
-    pub fn double_quotes(self) -> DocBuilder<'a, D, A> {
+    pub fn double_quotes(self) -> DocBuilder<'a, D> {
         self.enclose("\"", "\"")
     }
-    pub fn parens(self) -> DocBuilder<'a, D, A> {
+    pub fn parens(self) -> DocBuilder<'a, D> {
         self.enclose("(", ")")
     }
 
-    pub fn angles(self) -> DocBuilder<'a, D, A> {
+    pub fn angles(self) -> DocBuilder<'a, D> {
         self.enclose("<", ">")
     }
-    pub fn braces(self) -> DocBuilder<'a, D, A> {
+    pub fn braces(self) -> DocBuilder<'a, D> {
         self.enclose("{", "}")
     }
 
-    pub fn brackets(self) -> DocBuilder<'a, D, A> {
+    pub fn brackets(self) -> DocBuilder<'a, D> {
         self.enclose("[", "]")
     }
 
@@ -324,7 +314,7 @@ where
         }
     }
 
-    pub(crate) fn into_plain_doc(self) -> Doc<'a, D::Doc, A> {
+    pub(crate) fn into_plain_doc(self) -> Doc<'a, D::Doc> {
         match self.1 {
             BuildDoc::DocPtr(_) => unreachable!(),
             BuildDoc::Doc(d) => d,
@@ -332,32 +322,32 @@ where
     }
 }
 
-impl<'a, D, A, P> Add<P> for DocBuilder<'a, D, A>
+impl<'a, D, P> Add<P> for DocBuilder<'a, D>
 where
-    D: ?Sized + DocAllocator<'a, A>,
-    P: Pretty<'a, D, A>,
+    D: ?Sized + DocAllocator<'a>,
+    P: Pretty<'a, D>,
 {
-    type Output = DocBuilder<'a, D, A>;
+    type Output = DocBuilder<'a, D>;
     fn add(self, other: P) -> Self::Output {
         self.append(other)
     }
 }
 
-impl<'a, D, A, P> AddAssign<P> for DocBuilder<'a, D, A>
+impl<'a, D, P> AddAssign<P> for DocBuilder<'a, D>
 where
-    D: ?Sized + DocAllocator<'a, A>,
-    P: Pretty<'a, D, A>,
+    D: ?Sized + DocAllocator<'a>,
+    P: Pretty<'a, D>,
 {
     fn add_assign(&mut self, other: P) {
         *self = DocBuilder(self.0, std::mem::take(&mut self.1)).append(other)
     }
 }
 
-impl<'a, D, A> Deref for DocBuilder<'a, D, A>
+impl<'a, D> Deref for DocBuilder<'a, D>
 where
-    D: ?Sized + DocAllocator<'a, A>,
+    D: ?Sized + DocAllocator<'a>,
 {
-    type Target = Doc<'a, D::Doc, A>;
+    type Target = Doc<'a, D::Doc>;
     fn deref(&self) -> &Self::Target {
         match &self.1 {
             BuildDoc::DocPtr(d) => d,
@@ -366,21 +356,19 @@ where
     }
 }
 
-impl<'a, D, A> fmt::Debug for DocBuilder<'a, D, A>
+impl<'a, D> fmt::Debug for DocBuilder<'a, D>
 where
-    D: ?Sized + DocAllocator<'a, A>,
+    D: ?Sized + DocAllocator<'a>,
     D::Doc: fmt::Debug,
-    A: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.1.fmt(f)
     }
 }
 
-impl<'a, A, D> Clone for DocBuilder<'a, D, A>
+impl<'a, D> Clone for DocBuilder<'a, D>
 where
-    A: Clone,
-    D: DocAllocator<'a, A> + 'a,
+    D: DocAllocator<'a> + 'a,
     D::Doc: Clone,
 {
     fn clone(&self) -> Self {
@@ -388,11 +376,11 @@ where
     }
 }
 
-impl<'a, D, A> From<DocBuilder<'a, D, A>> for BuildDoc<'a, D::Doc, A>
+impl<'a, D> From<DocBuilder<'a, D>> for BuildDoc<'a, D::Doc>
 where
-    D: ?Sized + DocAllocator<'a, A>,
+    D: ?Sized + DocAllocator<'a>,
 {
-    fn from(val: DocBuilder<'a, D, A>) -> Self {
+    fn from(val: DocBuilder<'a, D>) -> Self {
         val.1
     }
 }

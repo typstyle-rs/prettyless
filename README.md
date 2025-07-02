@@ -41,7 +41,6 @@ See [Installation](https://doc.rust-lang.org/book/ch01-01-installation.html) for
 ```bash
 cargo build                                          ## build library and binary
 cargo run --example trees                            ## run the example (pretty trees)
-cargo run --example colored --features termcolor     ## run the example (pretty colored output)
 cargo bench                                          ## run benchmarks
 cargo test                                           ## run tests
 ```

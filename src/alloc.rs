@@ -3,25 +3,22 @@ use std::{borrow::Cow, fmt};
 use crate::{BuildDoc, Doc, DocBuilder, DocPtr, Pretty, RefDoc, SmallText};
 
 /// The `DocAllocator` trait abstracts over a type which can allocate (pointers to) `Doc`.
-pub trait DocAllocator<'a, A = ()>
-where
-    A: 'a,
-{
-    type Doc: DocPtr<'a, A>;
+pub trait DocAllocator<'a> {
+    type Doc: DocPtr<'a>;
 
-    fn alloc(&'a self, doc: Doc<'a, Self::Doc, A>) -> Self::Doc;
+    fn alloc(&'a self, doc: Doc<'a, Self::Doc>) -> Self::Doc;
 
     fn alloc_column_fn(
         &'a self,
         f: impl Fn(usize) -> Self::Doc + 'a,
-    ) -> <Self::Doc as DocPtr<'a, A>>::ColumnFn;
+    ) -> <Self::Doc as DocPtr<'a>>::ColumnFn;
 
     fn alloc_width_fn(
         &'a self,
         f: impl Fn(isize) -> Self::Doc + 'a,
-    ) -> <Self::Doc as DocPtr<'a, A>>::WidthFn;
+    ) -> <Self::Doc as DocPtr<'a>>::WidthFn;
 
-    fn alloc_cow(&'a self, doc: BuildDoc<'a, Self::Doc, A>) -> Self::Doc {
+    fn alloc_cow(&'a self, doc: BuildDoc<'a, Self::Doc>) -> Self::Doc {
         match doc {
             BuildDoc::DocPtr(d) => d,
             BuildDoc::Doc(d) => self.alloc(d),
@@ -30,7 +27,7 @@ where
 
     /// Allocate an empty document.
     #[inline]
-    fn nil(&'a self) -> DocBuilder<'a, Self, A> {
+    fn nil(&'a self) -> DocBuilder<'a, Self> {
         DocBuilder(self, Doc::Nil.into())
     }
 
@@ -38,24 +35,24 @@ where
     ///
     /// Primarily used to abort rendering inside the left side of `Union`
     #[inline]
-    fn fail(&'a self) -> DocBuilder<'a, Self, A> {
+    fn fail(&'a self) -> DocBuilder<'a, Self> {
         DocBuilder(self, Doc::Fail.into())
     }
 
     /// Allocate a single hardline.
     #[inline]
-    fn hardline(&'a self) -> DocBuilder<'a, Self, A> {
+    fn hardline(&'a self) -> DocBuilder<'a, Self> {
         DocBuilder(self, Doc::Hardline.into())
     }
 
     #[inline]
-    fn space(&'a self) -> DocBuilder<'a, Self, A> {
+    fn space(&'a self) -> DocBuilder<'a, Self> {
         self.text(" ")
     }
 
     /// A line acts like a `\n` but behaves like `space` if it is grouped on a single line.
     #[inline]
-    fn line(&'a self) -> DocBuilder<'a, Self, A> {
+    fn line(&'a self) -> DocBuilder<'a, Self> {
         self.hardline().flat_alt(self.space())
     }
 
@@ -64,7 +61,7 @@ where
     /// ```
     /// use prettyless::{Doc, RcDoc};
     ///
-    /// let doc = RcDoc::<()>::group(
+    /// let doc = RcDoc::group(
     ///     RcDoc::text("(")
     ///         .append(
     ///             RcDoc::line_()
@@ -80,19 +77,19 @@ where
     /// assert_eq!(doc.pretty(100).to_string(), "(test test)");
     /// ```
     #[inline]
-    fn line_(&'a self) -> DocBuilder<'a, Self, A> {
+    fn line_(&'a self) -> DocBuilder<'a, Self> {
         self.hardline().flat_alt(self.nil())
     }
 
     /// A `softline` acts like `space` if the document fits the page, otherwise like `line`
     #[inline]
-    fn softline(&'a self) -> DocBuilder<'a, Self, A> {
+    fn softline(&'a self) -> DocBuilder<'a, Self> {
         self.line().group()
     }
 
     /// A `softline_` acts like `nil` if the document fits the page, otherwise like `line_`
     #[inline]
-    fn softline_(&'a self) -> DocBuilder<'a, Self, A> {
+    fn softline_(&'a self) -> DocBuilder<'a, Self> {
         self.line_().group()
     }
 
@@ -100,7 +97,7 @@ where
     ///
     /// The given text must not contain line breaks.
     #[inline]
-    fn as_string<U: fmt::Display>(&'a self, data: U) -> DocBuilder<'a, Self, A> {
+    fn as_string<U: fmt::Display>(&'a self, data: U) -> DocBuilder<'a, Self> {
         use std::fmt::Write;
         let mut buf = FmtText::Small(SmallText::new());
         write!(buf, "{data}").unwrap();
@@ -115,7 +112,7 @@ where
     ///
     /// The given text must not contain line breaks.
     #[inline]
-    fn text<U: Into<Cow<'a, str>>>(&'a self, data: U) -> DocBuilder<'a, Self, A> {
+    fn text<U: Into<Cow<'a, str>>>(&'a self, data: U) -> DocBuilder<'a, Self> {
         let data: Cow<_> = data.into();
         let doc = if data.is_empty() {
             Doc::Nil.into()
@@ -130,10 +127,10 @@ where
 
     /// Allocate a document concatenating the given documents.
     #[inline]
-    fn concat<I>(&'a self, docs: I) -> DocBuilder<'a, Self, A>
+    fn concat<I>(&'a self, docs: I) -> DocBuilder<'a, Self>
     where
         I: IntoIterator,
-        I::Item: Pretty<'a, Self, A>,
+        I::Item: Pretty<'a, Self>,
     {
         docs.into_iter().fold(self.nil(), |a, b| a.append(b))
     }
@@ -146,11 +143,11 @@ where
     /// NOTE: The separator type, `S` may need to be cloned. Consider using cheaply cloneable ptr
     /// like `RefDoc` or `RcDoc`
     #[inline]
-    fn intersperse<I, S>(&'a self, docs: I, separator: S) -> DocBuilder<'a, Self, A>
+    fn intersperse<I, S>(&'a self, docs: I, separator: S) -> DocBuilder<'a, Self>
     where
         I: IntoIterator,
-        I::Item: Pretty<'a, Self, A>,
-        S: Pretty<'a, Self, A> + Clone,
+        I::Item: Pretty<'a, Self>,
+        S: Pretty<'a, Self> + Clone,
     {
         let mut result = self.nil();
         let mut iter = docs.into_iter();
@@ -172,7 +169,7 @@ where
     /// ```rust
     /// use prettyless::DocAllocator;
     ///
-    /// let arena = prettyless::Arena::<()>::new();
+    /// let arena = prettyless::Arena::new();
     /// let doc = arena.text("prefix ")
     ///     .append(arena.column(|l| {
     ///         arena.text("| <- column ").append(arena.as_string(l)).into_doc()
@@ -180,7 +177,7 @@ where
     /// assert_eq!(doc.1.pretty(80).to_string(), "prefix | <- column 7");
     /// ```
     #[inline]
-    fn column(&'a self, f: impl Fn(usize) -> Self::Doc + 'a) -> DocBuilder<'a, Self, A> {
+    fn column(&'a self, f: impl Fn(usize) -> Self::Doc + 'a) -> DocBuilder<'a, Self> {
         DocBuilder(self, Doc::Column(self.alloc_column_fn(f)).into())
     }
 
@@ -189,7 +186,7 @@ where
     /// ```rust
     /// use prettyless::DocAllocator;
     ///
-    /// let arena = prettyless::Arena::<()>::new();
+    /// let arena = prettyless::Arena::new();
     /// let doc = arena.text("prefix ")
     ///     .append(arena.nesting(|l| {
     ///         arena.text("[Nested: ").append(arena.as_string(l)).append("]").into_doc()
@@ -197,17 +194,16 @@ where
     /// assert_eq!(doc.1.pretty(80).to_string(), "prefix [Nested: 4]");
     /// ```
     #[inline]
-    fn nesting(&'a self, f: impl Fn(usize) -> Self::Doc + 'a) -> DocBuilder<'a, Self, A> {
+    fn nesting(&'a self, f: impl Fn(usize) -> Self::Doc + 'a) -> DocBuilder<'a, Self> {
         DocBuilder(self, Doc::Nesting(self.alloc_column_fn(f)).into())
     }
 
     /// Reflows `text` inserting `softline` in place of any whitespace
     #[inline]
-    fn reflow(&'a self, text: &'a str) -> DocBuilder<'a, Self, A>
+    fn reflow(&'a self, text: &'a str) -> DocBuilder<'a, Self>
     where
         Self: Sized,
         Self::Doc: Clone,
-        A: Clone,
     {
         self.intersperse(text.split(char::is_whitespace), self.softline())
     }
@@ -221,18 +217,18 @@ trait DropT {}
 impl<T> DropT for T {}
 
 /// An arena which can be used to allocate `Doc` values.
-pub struct Arena<'a, A = ()> {
-    docs: typed_arena::Arena<Doc<'a, RefDoc<'a, A>, A>>,
+pub struct Arena<'a> {
+    docs: typed_arena::Arena<Doc<'a, RefDoc<'a>>>,
     column_fns: typed_arena::Arena<Box<dyn DropT>>,
 }
 
-impl<A> Default for Arena<'_, A> {
+impl Default for Arena<'_> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<'a, A> Arena<'a, A> {
+impl<'a> Arena<'a> {
     pub fn new() -> Self {
         Arena {
             docs: typed_arena::Arena::new(),
@@ -262,38 +258,37 @@ impl<'a, A> Arena<'a, A> {
     }
 }
 
-impl<'a, D, A> DocAllocator<'a, A> for &'a D
+impl<'a, D> DocAllocator<'a> for &'a D
 where
-    D: ?Sized + DocAllocator<'a, A>,
-    A: 'a,
+    D: ?Sized + DocAllocator<'a>,
 {
     type Doc = D::Doc;
 
     #[inline]
-    fn alloc(&'a self, doc: Doc<'a, Self::Doc, A>) -> Self::Doc {
+    fn alloc(&'a self, doc: Doc<'a, Self::Doc>) -> Self::Doc {
         (**self).alloc(doc)
     }
 
     fn alloc_column_fn(
         &'a self,
         f: impl Fn(usize) -> Self::Doc + 'a,
-    ) -> <Self::Doc as DocPtr<'a, A>>::ColumnFn {
+    ) -> <Self::Doc as DocPtr<'a>>::ColumnFn {
         (**self).alloc_column_fn(f)
     }
 
     fn alloc_width_fn(
         &'a self,
         f: impl Fn(isize) -> Self::Doc + 'a,
-    ) -> <Self::Doc as DocPtr<'a, A>>::WidthFn {
+    ) -> <Self::Doc as DocPtr<'a>>::WidthFn {
         (**self).alloc_width_fn(f)
     }
 }
 
-impl<'a, A> DocAllocator<'a, A> for Arena<'a, A> {
-    type Doc = RefDoc<'a, A>;
+impl<'a> DocAllocator<'a> for Arena<'a> {
+    type Doc = RefDoc<'a>;
 
     #[inline]
-    fn alloc(&'a self, doc: Doc<'a, Self::Doc, A>) -> Self::Doc {
+    fn alloc(&'a self, doc: Doc<'a, Self::Doc>) -> Self::Doc {
         RefDoc(match doc {
             // Return 'static references for common variants to avoid some allocations
             Doc::Nil => &Doc::Nil,
@@ -329,14 +324,14 @@ impl<'a, A> DocAllocator<'a, A> for Arena<'a, A> {
     fn alloc_column_fn(
         &'a self,
         f: impl Fn(usize) -> Self::Doc + 'a,
-    ) -> <Self::Doc as DocPtr<'a, A>>::ColumnFn {
+    ) -> <Self::Doc as DocPtr<'a>>::ColumnFn {
         self.alloc_any(f)
     }
 
     fn alloc_width_fn(
         &'a self,
         f: impl Fn(isize) -> Self::Doc + 'a,
-    ) -> <Self::Doc as DocPtr<'a, A>>::WidthFn {
+    ) -> <Self::Doc as DocPtr<'a>>::WidthFn {
         self.alloc_any(f)
     }
 }

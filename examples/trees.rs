@@ -14,11 +14,10 @@ impl<'a> Forest<'a> {
         Forest(&[])
     }
 
-    fn bracket<'b, D, A>(&'b self, allocator: &'b D) -> DocBuilder<'b, D, A>
+    fn bracket<'b, D>(&'b self, allocator: &'b D) -> DocBuilder<'b, D>
     where
-        D: DocAllocator<'b, A>,
+        D: DocAllocator<'b>,
         D::Doc: Clone,
-        A: Clone,
     {
         if (self.0).is_empty() {
             allocator.nil()
@@ -31,11 +30,10 @@ impl<'a> Forest<'a> {
         }
     }
 
-    fn pretty<'b, D, A>(&'b self, allocator: &'b D) -> DocBuilder<'b, D, A>
+    fn pretty<'b, D>(&'b self, allocator: &'b D) -> DocBuilder<'b, D>
     where
-        D: DocAllocator<'b, A>,
+        D: DocAllocator<'b>,
         D::Doc: Clone,
-        A: Clone,
     {
         let forest = self.0;
         let separator = allocator.text(",").append(allocator.hardline());
@@ -64,11 +62,10 @@ impl<'a> Tree<'a> {
         }
     }
 
-    pub fn pretty<'b, D, A>(&'b self, allocator: &'b D) -> DocBuilder<'b, D, A>
+    pub fn pretty<'b, D>(&'b self, allocator: &'b D) -> DocBuilder<'b, D>
     where
-        D: DocAllocator<'b, A>,
+        D: DocAllocator<'b>,
         D::Doc: Clone,
-        A: Clone,
     {
         allocator
             .text(&self.node[..])
@@ -95,14 +92,14 @@ pub fn main() {
     {
         print!("\nwriting to stdout directly:\n");
         let mut out = io::stdout();
-        example.pretty::<_, ()>(&allocator).1.render(70, &mut out)
+        example.pretty(&allocator).1.render(70, &mut out)
         // try writing to memory
     }
     .and_then(|()| {
         print!("\nwriting to string then printing:\n");
         let mut mem = Vec::new();
         example
-            .pretty::<_, ()>(&allocator)
+            .pretty(&allocator)
             .1
             .render(70, &mut mem)
             // print to console from memory

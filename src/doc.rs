@@ -2,19 +2,13 @@ use std::{borrow::Cow, fmt, ops::Deref, rc::Rc};
 
 use crate::{BoxAllocator, DocAllocator, DocBuilder, Pretty, RcAllocator, SmallText};
 
-pub trait DocPtr<'a, A>: Deref<Target = Doc<'a, Self, A>> + Sized
-where
-    A: 'a,
-{
+pub trait DocPtr<'a>: Deref<Target = Doc<'a, Self>> + Sized {
     type ColumnFn: Deref<Target = dyn Fn(usize) -> Self + 'a> + Clone + 'a;
     type WidthFn: Deref<Target = dyn Fn(isize) -> Self + 'a> + Clone + 'a;
 }
 
-pub trait StaticDoc<'a, A>: DocPtr<'a, A>
-where
-    A: 'a,
-{
-    type Allocator: DocAllocator<'a, A, Doc = Self> + 'static;
+pub trait StaticDoc<'a>: DocPtr<'a> {
+    type Allocator: DocAllocator<'a, Doc = Self> + 'static;
     const ALLOCATOR: &'static Self::Allocator;
 }
 
@@ -24,9 +18,9 @@ where
 /// The `T` parameter is used to abstract over pointers to `Doc`. See `RefDoc` and `BoxDoc` for how
 /// it is used
 #[derive(Clone)]
-pub enum Doc<'a, T, A = ()>
+pub enum Doc<'a, T>
 where
-    T: DocPtr<'a, A>,
+    T: DocPtr<'a>,
 {
     Nil,
     Append(T, T),
@@ -39,16 +33,15 @@ where
     OwnedText(Box<str>),
     BorrowedText(&'a str),
     SmallText(SmallText),
-    Annotated(A, T),
     Union(T, T),
     Column(T::ColumnFn),
     Nesting(T::ColumnFn),
     Fail,
 }
 
-impl<'a, T, A> Doc<'a, T, A>
+impl<'a, T> Doc<'a, T>
 where
-    T: StaticDoc<'a, A>,
+    T: StaticDoc<'a>,
 {
     /// The text `t.to_string()`.
     ///
@@ -66,7 +59,7 @@ where
 
     fn flat_alt<D>(self, doc: D) -> Self
     where
-        D: Pretty<'a, T::Allocator, A>,
+        D: Pretty<'a, T::Allocator>,
     {
         DocBuilder(T::ALLOCATOR, self.into())
             .flat_alt(doc)
@@ -74,38 +67,37 @@ where
     }
 }
 
-impl<'a, T, A> Default for Doc<'a, T, A>
+impl<'a, T> Default for Doc<'a, T>
 where
-    T: DocPtr<'a, A>,
+    T: DocPtr<'a>,
 {
     fn default() -> Self {
         Self::Nil
     }
 }
 
-impl<'a, T, A, S> From<S> for Doc<'a, T, A>
+impl<'a, T, S> From<S> for Doc<'a, T>
 where
-    T: StaticDoc<'a, A>,
+    T: StaticDoc<'a>,
     S: Into<Cow<'a, str>>,
 {
-    fn from(s: S) -> Doc<'a, T, A> {
+    fn from(s: S) -> Doc<'a, T> {
         Doc::text(s)
     }
 }
 
-impl<'a, T, A> fmt::Debug for Doc<'a, T, A>
+impl<'a, T> fmt::Debug for Doc<'a, T>
 where
-    T: DocPtr<'a, A> + fmt::Debug,
-    A: fmt::Debug,
+    T: DocPtr<'a> + fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let is_line = |doc: &Doc<'a, T, A>| match doc {
+        let is_line = |doc: &Doc<'a, T>| match doc {
             Doc::FlatAlt(x, y) => {
                 matches!((&**x, &**y), (Doc::Hardline, Doc::BorrowedText(" ")))
             }
             _ => false,
         };
-        let is_line_ = |doc: &Doc<'a, T, A>| match doc {
+        let is_line_ = |doc: &Doc<'a, T>| match doc {
             Doc::FlatAlt(x, y) => {
                 matches!((&**x, &**y), (Doc::Hardline, Doc::Nil))
             }
@@ -138,9 +130,6 @@ where
             Doc::OwnedText(ref s) => s.fmt(f),
             Doc::BorrowedText(ref s) => s.fmt(f),
             Doc::SmallText(ref s) => s.fmt(f),
-            Doc::Annotated(ref ann, ref doc) => {
-                f.debug_tuple("Annotated").field(ann).field(doc).finish()
-            }
             Doc::Union(ref l, ref r) => f.debug_tuple("Union").field(l).field(r).finish(),
             Doc::Column(_) => f.debug_tuple("Column(..)").finish(),
             Doc::Nesting(_) => f.debug_tuple("Nesting(..)").finish(),
@@ -149,11 +138,9 @@ where
     }
 }
 
-fn append_docs<'a, 'd, T, A>(
-    mut doc: &'d Doc<'a, T, A>,
-    consumer: &mut impl FnMut(&'d Doc<'a, T, A>),
-) where
-    T: DocPtr<'a, A>,
+fn append_docs<'a, 'd, T>(mut doc: &'d Doc<'a, T>, consumer: &mut impl FnMut(&'d Doc<'a, T>))
+where
+    T: DocPtr<'a>,
 {
     loop {
         match doc {
@@ -169,74 +156,71 @@ fn append_docs<'a, 'd, T, A>(
 macro_rules! impl_doc {
     ($name: ident, $ptr: ident, $allocator: ident) => {
         #[derive(Clone)]
-        pub struct $name<'a, A = ()>($ptr<Doc<'a, $name<'a, A>, A>>);
+        pub struct $name<'a>($ptr<Doc<'a, $name<'a>>>);
 
-        impl<'a, A> fmt::Debug for $name<'a, A>
-        where
-            A: fmt::Debug,
-        {
+        impl<'a> fmt::Debug for $name<'a> {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 self.0.fmt(f)
             }
         }
 
-        impl<'a, A> $name<'a, A> {
-            pub fn new(doc: Doc<'a, $name<'a, A>, A>) -> $name<'a, A> {
+        impl<'a> $name<'a> {
+            pub fn new(doc: Doc<'a, $name<'a>>) -> $name<'a> {
                 $name($ptr::new(doc))
             }
         }
 
-        impl<'a, A> From<Doc<'a, Self, A>> for $name<'a, A> {
-            fn from(doc: Doc<'a, $name<'a, A>, A>) -> $name<'a, A> {
+        impl<'a> From<Doc<'a, Self>> for $name<'a> {
+            fn from(doc: Doc<'a, $name<'a>>) -> $name<'a> {
                 $name::new(doc)
             }
         }
 
-        impl<'a, A> Deref for $name<'a, A> {
-            type Target = Doc<'a, $name<'a, A>, A>;
+        impl<'a> Deref for $name<'a> {
+            type Target = Doc<'a, $name<'a>>;
 
             fn deref(&self) -> &Self::Target {
                 &self.0
             }
         }
 
-        impl<'a, A> DocAllocator<'a, A> for $allocator
+        impl<'a> DocAllocator<'a> for $allocator
         where
-            A: 'a,
+
         {
-            type Doc = $name<'a, A>;
+            type Doc = $name<'a>;
 
             #[inline]
-            fn alloc(&'a self, doc: Doc<'a, Self::Doc, A>) -> Self::Doc {
+            fn alloc(&'a self, doc: Doc<'a, Self::Doc>) -> Self::Doc {
                 $name::new(doc)
             }
             fn alloc_column_fn(
                 &'a self,
                 f: impl Fn(usize) -> Self::Doc + 'a,
-            ) -> <Self::Doc as DocPtr<'a, A>>::ColumnFn {
+            ) -> <Self::Doc as DocPtr<'a>>::ColumnFn {
                 Rc::new(f)
             }
             fn alloc_width_fn(
                 &'a self,
                 f: impl Fn(isize) -> Self::Doc + 'a,
-            ) -> <Self::Doc as DocPtr<'a, A>>::WidthFn {
+            ) -> <Self::Doc as DocPtr<'a>>::WidthFn {
                 Rc::new(f)
             }
         }
 
-        impl<'a, A> DocPtr<'a, A> for $name<'a, A> {
+        impl<'a> DocPtr<'a> for $name<'a> {
             type ColumnFn = std::rc::Rc<dyn Fn(usize) -> Self + 'a>;
             type WidthFn = std::rc::Rc<dyn Fn(isize) -> Self + 'a>;
         }
 
-        impl<'a, A> StaticDoc<'a, A> for $name<'a, A> {
+        impl<'a> StaticDoc<'a> for $name<'a> {
             type Allocator = $allocator;
             const ALLOCATOR: &'static Self::Allocator = &$allocator;
         }
 
-        impl_doc_methods!($name ('a, A) where () where ());
+        impl_doc_methods!($name ('a) where () where ());
 
-        impl<'a, A> $name<'a, A> {
+        impl<'a> $name<'a> {
             /// The text `t.to_string()`.
             ///
             /// The given text must not contain line breaks.
@@ -255,7 +239,7 @@ macro_rules! impl_doc {
             #[inline]
             pub fn append<D>(self, that: D) -> Self
             where
-                D: Pretty<'a, $allocator, A>,
+                D: Pretty<'a, $allocator>,
             {
                 DocBuilder(&$allocator, self.into()).append(that).into_doc()
             }
@@ -265,7 +249,7 @@ macro_rules! impl_doc {
             pub fn concat<I>(docs: I) -> Self
             where
                 I: IntoIterator,
-                I::Item: Pretty<'a, $allocator, A>,
+                I::Item: Pretty<'a, $allocator>,
             {
                 $allocator.concat(docs).into_doc()
             }
@@ -281,9 +265,8 @@ macro_rules! impl_doc {
             pub fn intersperse<I, S>(docs: I, separator: S) -> Self
             where
                 I: IntoIterator,
-                I::Item: Pretty<'a, $allocator, A>,
-                S: Pretty<'a, $allocator, A> + Clone,
-                A: Clone,
+                I::Item: Pretty<'a, $allocator>,
+                S: Pretty<'a, $allocator> + Clone,
             {
                 $allocator.intersperse(docs, separator).into_doc()
             }
@@ -292,7 +275,7 @@ macro_rules! impl_doc {
             #[inline]
             pub fn flat_alt<D>(self, doc: D) -> Self
             where
-                D: Pretty<'a, $allocator, A>,
+                D: Pretty<'a, $allocator>,
             {
                 DocBuilder(&$allocator, self.into())
                     .flat_alt(doc)
@@ -317,16 +300,9 @@ macro_rules! impl_doc {
             }
 
             #[inline]
-            pub fn annotate(self, ann: A) -> Self {
-                DocBuilder(&$allocator, self.into())
-                    .annotate(ann)
-                    .into_doc()
-            }
-
-            #[inline]
             pub fn union<D>(self, other: D) -> Self
             where
-                D: Into<BuildDoc<'a, Self, A>>,
+                D: Into<BuildDoc<'a, Self>>,
             {
                 DocBuilder(&$allocator, self.into()).union(other).into_doc()
             }
@@ -404,35 +380,32 @@ macro_rules! impl_doc_methods {
 impl_doc!(BoxDoc, Box, BoxAllocator);
 impl_doc!(RcDoc, Rc, RcAllocator);
 
-impl_doc_methods!(Doc ('a, D, A) where (D: DocPtr<'a, A>) where (D: StaticDoc<'a, A>));
-impl_doc_methods!(BuildDoc ('a, D, A) where (D: DocPtr<'a, A>) where (D: StaticDoc<'a, A>));
+impl_doc_methods!(Doc ('a, D) where (D: DocPtr<'a>) where (D: StaticDoc<'a>));
+impl_doc_methods!(BuildDoc ('a, D) where (D: DocPtr<'a>) where (D: StaticDoc<'a>));
 
 /// Newtype wrapper for `&Doc`
-pub struct RefDoc<'a, A = ()>(pub &'a Doc<'a, RefDoc<'a, A>, A>);
+pub struct RefDoc<'a>(pub &'a Doc<'a, RefDoc<'a>>);
 
-impl<'a, A> DocPtr<'a, A> for RefDoc<'a, A> {
+impl<'a> DocPtr<'a> for RefDoc<'a> {
     type ColumnFn = &'a (dyn Fn(usize) -> Self + 'a);
     type WidthFn = &'a (dyn Fn(isize) -> Self + 'a);
 }
 
-impl<A> Copy for RefDoc<'_, A> {}
-impl<A> Clone for RefDoc<'_, A> {
+impl Copy for RefDoc<'_> {}
+impl Clone for RefDoc<'_> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<A> fmt::Debug for RefDoc<'_, A>
-where
-    A: fmt::Debug,
-{
+impl fmt::Debug for RefDoc<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
     }
 }
 
-impl<'a, A> Deref for RefDoc<'a, A> {
-    type Target = Doc<'a, RefDoc<'a, A>, A>;
+impl<'a> Deref for RefDoc<'a> {
+    type Target = Doc<'a, RefDoc<'a>>;
 
     fn deref(&self) -> &Self::Target {
         self.0
@@ -441,17 +414,17 @@ impl<'a, A> Deref for RefDoc<'a, A> {
 
 /// Either a `Doc` or a pointer to a `Doc` (`D`)
 #[derive(Clone)]
-pub enum BuildDoc<'a, D, A>
+pub enum BuildDoc<'a, D>
 where
-    D: DocPtr<'a, A>,
+    D: DocPtr<'a>,
 {
     DocPtr(D),
-    Doc(Doc<'a, D, A>),
+    Doc(Doc<'a, D>),
 }
 
-impl<'a, T, A> BuildDoc<'a, T, A>
+impl<'a, T> BuildDoc<'a, T>
 where
-    T: StaticDoc<'a, A>,
+    T: StaticDoc<'a>,
 {
     /// The text `t.to_string()`.
     ///
@@ -469,36 +442,35 @@ where
 
     fn flat_alt<D>(self, doc: D) -> Self
     where
-        D: Pretty<'a, T::Allocator, A>,
+        D: Pretty<'a, T::Allocator>,
     {
         DocBuilder(T::ALLOCATOR, self).flat_alt(doc).1
     }
 }
 
-impl<'a, D, A> Default for BuildDoc<'a, D, A>
+impl<'a, D> Default for BuildDoc<'a, D>
 where
-    D: DocPtr<'a, A>,
+    D: DocPtr<'a>,
 {
     fn default() -> Self {
         Self::Doc(Doc::default())
     }
 }
 
-impl<'a, D, A> fmt::Debug for BuildDoc<'a, D, A>
+impl<'a, D> fmt::Debug for BuildDoc<'a, D>
 where
-    D: DocPtr<'a, A> + fmt::Debug,
-    A: fmt::Debug,
+    D: DocPtr<'a> + fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         (**self).fmt(f)
     }
 }
 
-impl<'a, D, A> Deref for BuildDoc<'a, D, A>
+impl<'a, D> Deref for BuildDoc<'a, D>
 where
-    D: DocPtr<'a, A>,
+    D: DocPtr<'a>,
 {
-    type Target = Doc<'a, D, A>;
+    type Target = Doc<'a, D>;
     fn deref(&self) -> &Self::Target {
         match self {
             BuildDoc::DocPtr(d) => d,
@@ -507,64 +479,64 @@ where
     }
 }
 
-impl<'a, A> From<RefDoc<'a, A>> for BuildDoc<'a, RefDoc<'a, A>, A> {
-    fn from(s: RefDoc<'a, A>) -> Self {
+impl<'a> From<RefDoc<'a>> for BuildDoc<'a, RefDoc<'a>> {
+    fn from(s: RefDoc<'a>) -> Self {
         BuildDoc::DocPtr(s)
     }
 }
 
-impl<'a, A> From<BoxDoc<'a, A>> for BuildDoc<'a, BoxDoc<'a, A>, A> {
-    fn from(s: BoxDoc<'a, A>) -> Self {
+impl<'a> From<BoxDoc<'a>> for BuildDoc<'a, BoxDoc<'a>> {
+    fn from(s: BoxDoc<'a>) -> Self {
         BuildDoc::DocPtr(s)
     }
 }
 
-impl<'a, A> From<RcDoc<'a, A>> for BuildDoc<'a, RcDoc<'a, A>, A> {
-    fn from(s: RcDoc<'a, A>) -> Self {
+impl<'a> From<RcDoc<'a>> for BuildDoc<'a, RcDoc<'a>> {
+    fn from(s: RcDoc<'a>) -> Self {
         BuildDoc::DocPtr(s)
     }
 }
 
-impl<'a, T, A> From<Doc<'a, T, A>> for BuildDoc<'a, T, A>
+impl<'a, T> From<Doc<'a, T>> for BuildDoc<'a, T>
 where
-    T: DocPtr<'a, A>,
+    T: DocPtr<'a>,
 {
-    fn from(s: Doc<'a, T, A>) -> Self {
+    fn from(s: Doc<'a, T>) -> Self {
         BuildDoc::Doc(s)
     }
 }
 
-impl<'a, T, A> From<String> for BuildDoc<'a, T, A>
+impl<'a, T> From<String> for BuildDoc<'a, T>
 where
-    T: StaticDoc<'a, A>,
+    T: StaticDoc<'a>,
 {
     fn from(s: String) -> Self {
         BuildDoc::Doc(Doc::text(s))
     }
 }
 
-impl<'a, T, A> From<&'a str> for BuildDoc<'a, T, A>
+impl<'a, T> From<&'a str> for BuildDoc<'a, T>
 where
-    T: StaticDoc<'a, A>,
+    T: StaticDoc<'a>,
 {
     fn from(s: &'a str) -> Self {
         BuildDoc::Doc(Doc::text(s))
     }
 }
 
-impl<'a, T, A> From<&'a String> for BuildDoc<'a, T, A>
+impl<'a, T> From<&'a String> for BuildDoc<'a, T>
 where
-    T: StaticDoc<'a, A>,
+    T: StaticDoc<'a>,
 {
     fn from(s: &'a String) -> Self {
         BuildDoc::Doc(Doc::text(s))
     }
 }
 
-impl<'a, T, A, S> From<Option<S>> for BuildDoc<'a, T, A>
+impl<'a, T, S> From<Option<S>> for BuildDoc<'a, T>
 where
-    T: DocPtr<'a, A>,
-    S: Into<BuildDoc<'a, T, A>>,
+    T: DocPtr<'a>,
+    S: Into<BuildDoc<'a, T>>,
 {
     fn from(s: Option<S>) -> Self {
         match s {

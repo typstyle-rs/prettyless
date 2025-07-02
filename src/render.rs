@@ -3,35 +3,31 @@ mod write;
 
 use std::{fmt, io};
 
-#[cfg(feature = "termcolor")]
-use termcolor::{ColorSpec, WriteColor};
-
 use crate::{Doc, DocPtr};
 
 use fit::print_doc;
-pub use write::{FmtWrite, IoWrite, RenderAnnotated};
+pub use write::{FmtWrite, IoWrite};
 
-pub struct PrettyFmt<'a, 'd, T, A>
+pub struct PrettyFmt<'a, 'd, T>
 where
-    A: 'a,
-    T: DocPtr<'a, A> + 'a,
+    T: DocPtr<'a> + 'a,
 {
-    doc: &'d Doc<'a, T, A>,
+    doc: &'d Doc<'a, T>,
     width: usize,
 }
 
-impl<'a, T, A> fmt::Display for PrettyFmt<'a, '_, T, A>
+impl<'a, T> fmt::Display for PrettyFmt<'a, '_, T>
 where
-    T: DocPtr<'a, A>,
+    T: DocPtr<'a>,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.doc.render_fmt(self.width, f)
     }
 }
 
-impl<'a, T, A> Doc<'a, T, A>
+impl<'a, T> Doc<'a, T>
 where
-    T: DocPtr<'a, A> + 'a,
+    T: DocPtr<'a> + 'a,
 {
     /// Writes a rendered document to a `std::io::Write` object.
     #[inline]
@@ -55,8 +51,7 @@ where
     #[inline]
     pub fn render_raw<W>(&self, width: usize, out: &mut W) -> Result<(), W::Error>
     where
-        for<'b> W: RenderAnnotated<'b, A>,
-        W: ?Sized,
+        W: ?Sized + Render,
     {
         print_doc(self, width, out)
     }
@@ -65,28 +60,14 @@ where
     ///
     /// ```
     /// use prettyless::{Doc, BoxDoc};
-    /// let doc = BoxDoc::<()>::group(
+    /// let doc = BoxDoc::group(
     ///     BoxDoc::text("hello").append(Doc::line()).append(Doc::text("world"))
     /// );
     /// assert_eq!(format!("{}", doc.pretty(80)), "hello world");
     /// ```
     #[inline]
-    pub fn pretty<'d>(&'d self, width: usize) -> PrettyFmt<'a, 'd, T, A> {
+    pub fn pretty<'d>(&'d self, width: usize) -> PrettyFmt<'a, 'd, T> {
         PrettyFmt { doc: self, width }
-    }
-}
-
-#[cfg(feature = "termcolor")]
-impl<'a, T> Doc<'a, T, ColorSpec>
-where
-    T: DocPtr<'a, ColorSpec> + 'a,
-{
-    #[inline]
-    pub fn render_colored<W>(&self, width: usize, out: W) -> io::Result<()>
-    where
-        W: WriteColor,
-    {
-        print_doc(self, width, &mut write::TermColored::new(out))
     }
 }
 

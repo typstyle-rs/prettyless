@@ -1,19 +1,11 @@
-use crate::{Doc, DocPtr};
+use crate::{Doc, DocPtr, Render};
 
-use super::{
-    write::{write_newline, BufferWrite},
-    RenderAnnotated,
-};
+use super::write::{write_newline, BufferWrite};
 
-pub fn print_doc<'a, W, T, A>(
-    doc: &Doc<'a, T, A>,
-    width: usize,
-    out: &mut W,
-) -> Result<(), W::Error>
+pub fn print_doc<'a, W, T>(doc: &Doc<'a, T>, width: usize, out: &mut W) -> Result<(), W::Error>
 where
-    T: DocPtr<'a, A> + 'a,
-    for<'b> W: RenderAnnotated<'b, A>,
-    W: ?Sized,
+    T: DocPtr<'a> + 'a,
+    W: ?Sized + Render,
 {
     let temp_arena = &typed_arena::Arena::new();
     Printer {
@@ -24,7 +16,6 @@ where
             doc,
         }],
         fit_docs: vec![],
-        annotation_levels: vec![],
         width,
         temp_arena,
     }
@@ -39,35 +30,33 @@ enum Mode {
     Flat,
 }
 
-struct Cmd<'d, 'a, T, A>
+struct Cmd<'d, 'a, T>
 where
-    T: DocPtr<'a, A> + 'a,
+    T: DocPtr<'a> + 'a,
 {
     indent: usize,
     mode: Mode,
-    doc: &'d Doc<'a, T, A>,
+    doc: &'d Doc<'a, T>,
 }
 
-struct Printer<'d, 'a, T, A>
+struct Printer<'d, 'a, T>
 where
-    T: DocPtr<'a, A> + 'a,
+    T: DocPtr<'a> + 'a,
 {
     pos: usize,
-    cmds: Vec<Cmd<'d, 'a, T, A>>,
-    fit_docs: Vec<&'d Doc<'a, T, A>>,
-    annotation_levels: Vec<usize>,
+    cmds: Vec<Cmd<'d, 'a, T>>,
+    fit_docs: Vec<&'d Doc<'a, T>>,
     width: usize,
     temp_arena: &'d typed_arena::Arena<T>,
 }
 
-impl<'d, 'a, T, A> Printer<'d, 'a, T, A>
+impl<'d, 'a, T> Printer<'d, 'a, T>
 where
-    T: DocPtr<'a, A> + 'a,
+    T: DocPtr<'a> + 'a,
 {
     fn print_to<W>(&mut self, top: usize, out: &mut W) -> Result<bool, W::Error>
     where
-        W: RenderAnnotated<'d, A>,
-        W: ?Sized,
+        W: ?Sized + Render,
     {
         let mut fits = true;
         while self.cmds.len() > top {
@@ -156,7 +145,6 @@ where
                         // Try the left branch in a buffer
                         let save_pos = self.pos;
                         let save_cmds = self.cmds.len();
-                        let save_anns = self.annotation_levels.len();
 
                         self.cmds.push(Cmd {
                             indent,
@@ -172,7 +160,6 @@ where
                             // Revert and try right
                             self.pos = save_pos;
                             self.cmds.truncate(save_cmds);
-                            self.annotation_levels.truncate(save_anns);
                             cmd.doc = right;
                         }
                     }
@@ -183,26 +170,14 @@ where
                     Doc::Nesting(ref f) => {
                         cmd.doc = self.temp_arena.alloc(f(indent));
                     }
-
-                    Doc::Annotated(ref ann, ref inner) => {
-                        out.push_annotation(ann)?;
-                        self.annotation_levels.push(self.cmds.len());
-                        cmd.doc = inner;
-                    }
                 }
-            }
-
-            // Pop any annotations that were opened at this stack depth
-            while self.annotation_levels.last() == Some(&self.cmds.len()) {
-                self.annotation_levels.pop();
-                out.pop_annotation()?;
             }
         }
 
         Ok(fits)
     }
 
-    fn fitting(&mut self, next: &'d Doc<'a, T, A>, mut pos: usize, indent: usize) -> bool {
+    fn fitting(&mut self, next: &'d Doc<'a, T>, mut pos: usize, indent: usize) -> bool {
         // We start in "flat" mode and may fall back to "break" mode when backtracking.
         let mut cmd_bottom = self.cmds.len();
         let mut mode = Mode::Flat;
@@ -276,10 +251,7 @@ where
                         };
                     }
 
-                    Doc::Nest(_, ref inner)
-                    | Doc::Group(ref inner)
-                    | Doc::Annotated(_, ref inner)
-                    | Doc::Union(_, ref inner) => {
+                    Doc::Nest(_, ref inner) | Doc::Group(ref inner) | Doc::Union(_, ref inner) => {
                         doc = inner;
                     }
 
@@ -299,25 +271,25 @@ where
     }
 }
 
-fn append_docs2<'a, 'd, T, A>(
-    ldoc: &'d Doc<'a, T, A>,
-    rdoc: &'d Doc<'a, T, A>,
-    mut consumer: impl FnMut(&'d Doc<'a, T, A>),
-) -> &'d Doc<'a, T, A>
+fn append_docs2<'a, 'd, T>(
+    ldoc: &'d Doc<'a, T>,
+    rdoc: &'d Doc<'a, T>,
+    mut consumer: impl FnMut(&'d Doc<'a, T>),
+) -> &'d Doc<'a, T>
 where
-    T: DocPtr<'a, A>,
+    T: DocPtr<'a>,
 {
     let d = append_docs(rdoc, &mut consumer);
     consumer(d);
     append_docs(ldoc, &mut consumer)
 }
 
-fn append_docs<'a, 'd, T, A>(
-    mut doc: &'d Doc<'a, T, A>,
-    consumer: &mut impl FnMut(&'d Doc<'a, T, A>),
-) -> &'d Doc<'a, T, A>
+fn append_docs<'a, 'd, T>(
+    mut doc: &'d Doc<'a, T>,
+    consumer: &mut impl FnMut(&'d Doc<'a, T>),
+) -> &'d Doc<'a, T>
 where
-    T: DocPtr<'a, A>,
+    T: DocPtr<'a>,
 {
     loop {
         // Since appended documents often appear in sequence on the left side we
