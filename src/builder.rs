@@ -4,7 +4,7 @@ use std::{
     ops::{Add, AddAssign, Deref},
 };
 
-use crate::{BuildDoc, Doc, DocAllocator, Pretty};
+use crate::{text::Text, BuildDoc, Doc, DocAllocator, Pretty};
 
 /// The `DocBuilder` type allows for convenient appending of documents even for arena allocated
 /// documents by storing the arena inline.
@@ -16,39 +16,31 @@ impl<'a, D> DocBuilder<'a, D>
 where
     D: ?Sized + DocAllocator<'a>,
 {
-    pub(crate) fn with_utf8_len(self) -> Self {
-        let s = match &*self {
-            Doc::OwnedText(s) => &s[..],
-            Doc::BorrowedText(s) => s,
-            Doc::SmallText(s) => s,
-            _ => return self,
-        };
+    pub(crate) fn from_utf8_text(allocator: &'a D, text: Text<'a>) -> Self {
+        let s = &*text;
 
-        if s.is_ascii() {
-            self
+        let doc = if s.is_ascii() {
+            Doc::Text(text)
         } else {
             let display_width = unicode_width::UnicodeWidthStr::width(s);
+            Doc::RenderLen(display_width, allocator.alloc(Doc::Text(text)))
+        };
 
-            let DocBuilder(allocator, _) = self;
-            DocBuilder(
-                allocator,
-                Doc::RenderLen(display_width, self.into_doc()).into(),
-            )
-        }
+        Self(allocator, doc.into())
     }
 
     /// Append the given document after this document.
     #[inline]
-    pub fn append<E>(self, that: E) -> DocBuilder<'a, D>
+    pub fn append<E>(self, that: E) -> Self
     where
         E: Pretty<'a, D>,
     {
-        let DocBuilder(allocator, _) = self;
+        let Self(allocator, _) = self;
         let that = that.pretty(allocator);
         match (&*self, &*that) {
             (Doc::Nil, _) => that,
             (_, Doc::Nil) => self,
-            _ => DocBuilder(
+            _ => Self(
                 allocator,
                 Doc::Append(
                     allocator.alloc_cow(self.into()),
@@ -84,13 +76,13 @@ where
     /// assert_eq!(doc.1.pretty(8).to_string(), "let x\nx");
     /// ```
     #[inline]
-    pub fn flat_alt<E>(self, that: E) -> DocBuilder<'a, D>
+    pub fn flat_alt<E>(self, that: E) -> Self
     where
         E: Pretty<'a, D>,
     {
-        let DocBuilder(allocator, this) = self;
+        let Self(allocator, this) = self;
         let that = that.pretty(allocator);
-        DocBuilder(
+        Self(
             allocator,
             Doc::FlatAlt(allocator.alloc_cow(this), allocator.alloc_cow(that.into())).into(),
         )
@@ -103,45 +95,41 @@ where
     /// horizontally and combined into a one single line, or they are each layed out on their own
     /// line.
     #[inline]
-    pub fn group(self) -> DocBuilder<'a, D> {
+    pub fn group(self) -> Self {
         match *self.1 {
-            Doc::Group(_)
-            | Doc::OwnedText(_)
-            | Doc::BorrowedText(_)
-            | Doc::SmallText(_)
-            | Doc::Nil => self,
+            Doc::Group(_) | Doc::Text(_) | Doc::Nil => self,
             _ => {
-                let DocBuilder(allocator, this) = self;
-                DocBuilder(allocator, Doc::Group(allocator.alloc_cow(this)).into())
+                let Self(allocator, this) = self;
+                Self(allocator, Doc::Group(allocator.alloc_cow(this)).into())
             }
         }
     }
 
     /// Increase the indentation level of this document.
     #[inline]
-    pub fn nest(self, offset: isize) -> DocBuilder<'a, D> {
+    pub fn nest(self, offset: isize) -> Self {
         if let Doc::Nil = &*self.1 {
             return self;
         }
         if offset == 0 {
             return self;
         }
-        let DocBuilder(allocator, this) = self;
-        DocBuilder(
+        let Self(allocator, this) = self;
+        Self(
             allocator,
             Doc::Nest(offset, allocator.alloc_cow(this)).into(),
         )
     }
 
     #[inline]
-    pub fn union<E>(self, other: E) -> DocBuilder<'a, D>
+    pub fn union<E>(self, other: E) -> Self
     where
         E: Into<BuildDoc<'a, D::Doc>>,
     {
-        let DocBuilder(allocator, this) = self;
+        let Self(allocator, this) = self;
         let other = other.into();
         let doc = Doc::Union(allocator.alloc_cow(this), allocator.alloc_cow(other));
-        DocBuilder(allocator, doc.into())
+        Self(allocator, doc.into())
     }
 
     /// Lays out `self` so with the nesting level set to the current column
@@ -164,9 +152,9 @@ where
     /// assert_eq!(doc.1.pretty(80).to_string(), "lorem ipsum\n      dolor\nnext");
     /// ```
     #[inline]
-    pub fn align(self) -> DocBuilder<'a, D>
+    pub fn align(self) -> Self
     where
-        DocBuilder<'a, D>: Clone,
+        Self: Clone,
     {
         let allocator = self.0;
         allocator.column(move |col| {
@@ -194,9 +182,9 @@ where
     /// );
     /// ```
     #[inline]
-    pub fn hang(self, adjust: isize) -> DocBuilder<'a, D>
+    pub fn hang(self, adjust: isize) -> Self
     where
-        DocBuilder<'a, D>: Clone,
+        Self: Clone,
     {
         self.nest(adjust).align()
     }
@@ -222,13 +210,13 @@ where
     /// );
     /// ```
     #[inline]
-    pub fn indent(self, adjust: usize) -> DocBuilder<'a, D>
+    pub fn indent(self, adjust: usize) -> Self
     where
-        DocBuilder<'a, D>: Clone,
+        Self: Clone,
     {
         let spaces = {
-            use crate::render::SPACES;
-            let DocBuilder(allocator, _) = self;
+            use crate::text::SPACES;
+            let Self(allocator, _) = self;
             let mut doc = allocator.nil();
             let mut remaining = adjust;
             while remaining != 0 {
@@ -257,16 +245,16 @@ where
     /// assert_eq!(doc.1.pretty(80).to_string(), "prefix | <- column 7");
     /// ```
     #[inline]
-    pub fn width(self, f: impl Fn(isize) -> D::Doc + 'a) -> DocBuilder<'a, D>
+    pub fn width(self, f: impl Fn(isize) -> D::Doc + 'a) -> Self
     where
         BuildDoc<'a, D::Doc>: Clone,
     {
-        let DocBuilder(allocator, this) = self;
+        let Self(allocator, this) = self;
         let f = allocator.alloc_width_fn(f);
         allocator.column(move |start| {
             let f = f.clone();
 
-            DocBuilder(allocator, this.clone())
+            Self(allocator, this.clone())
                 .append(allocator.column(move |end| f(end as isize - start as isize)))
                 .into_doc()
         })
@@ -274,36 +262,36 @@ where
 
     /// Puts `self` between `before` and `after`
     #[inline]
-    pub fn enclose<E, F>(self, before: E, after: F) -> DocBuilder<'a, D>
+    pub fn enclose<E, F>(self, before: E, after: F) -> Self
     where
         E: Pretty<'a, D>,
         F: Pretty<'a, D>,
     {
-        let DocBuilder(allocator, _) = self;
-        DocBuilder(allocator, before.pretty(allocator).1)
+        let Self(allocator, _) = self;
+        Self(allocator, before.pretty(allocator).1)
             .append(self)
             .append(after)
     }
 
-    pub fn single_quotes(self) -> DocBuilder<'a, D> {
+    pub fn single_quotes(self) -> Self {
         self.enclose("'", "'")
     }
 
-    pub fn double_quotes(self) -> DocBuilder<'a, D> {
+    pub fn double_quotes(self) -> Self {
         self.enclose("\"", "\"")
     }
-    pub fn parens(self) -> DocBuilder<'a, D> {
+    pub fn parens(self) -> Self {
         self.enclose("(", ")")
     }
 
-    pub fn angles(self) -> DocBuilder<'a, D> {
+    pub fn angles(self) -> Self {
         self.enclose("<", ">")
     }
-    pub fn braces(self) -> DocBuilder<'a, D> {
+    pub fn braces(self) -> Self {
         self.enclose("{", "}")
     }
 
-    pub fn brackets(self) -> DocBuilder<'a, D> {
+    pub fn brackets(self) -> Self {
         self.enclose("[", "]")
     }
 
@@ -327,7 +315,7 @@ where
     D: ?Sized + DocAllocator<'a>,
     P: Pretty<'a, D>,
 {
-    type Output = DocBuilder<'a, D>;
+    type Output = Self;
     fn add(self, other: P) -> Self::Output {
         self.append(other)
     }
@@ -339,7 +327,7 @@ where
     P: Pretty<'a, D>,
 {
     fn add_assign(&mut self, other: P) {
-        *self = DocBuilder(self.0, std::mem::take(&mut self.1)).append(other)
+        *self = Self(self.0, std::mem::take(&mut self.1)).append(other)
     }
 }
 
@@ -372,7 +360,7 @@ where
     D::Doc: Clone,
 {
     fn clone(&self) -> Self {
-        DocBuilder(self.0, self.1.clone())
+        Self(self.0, self.1.clone())
     }
 }
 

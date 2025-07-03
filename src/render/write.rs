@@ -1,6 +1,8 @@
 use std::{fmt, io};
 
-use super::{Render, SPACES};
+use crate::text::SPACES;
+
+use super::Render;
 
 /// Writes to something implementing `std::io::Write`
 pub struct IoWrite<W> {

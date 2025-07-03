@@ -1,6 +1,6 @@
 use std::{borrow::Cow, fmt};
 
-use crate::{BuildDoc, Doc, DocBuilder, DocPtr, Pretty, RefDoc, SmallText};
+use crate::{text::Text, BuildDoc, Doc, DocBuilder, DocPtr, Pretty, RefDoc};
 
 /// The `DocAllocator` trait abstracts over a type which can allocate (pointers to) `Doc`.
 pub trait DocAllocator<'a> {
@@ -98,14 +98,7 @@ pub trait DocAllocator<'a> {
     /// The given text must not contain line breaks.
     #[inline]
     fn as_string<U: fmt::Display>(&'a self, data: U) -> DocBuilder<'a, Self> {
-        use std::fmt::Write;
-        let mut buf = FmtText::Small(SmallText::new());
-        write!(buf, "{data}").unwrap();
-        let doc = match buf {
-            FmtText::Small(b) => Doc::SmallText(b),
-            FmtText::Large(b) => Doc::OwnedText(b.into()),
-        };
-        DocBuilder(self, doc.into()).with_utf8_len()
+        DocBuilder::from_utf8_text(self, data.into())
     }
 
     /// Allocate a document containing the given text.
@@ -114,15 +107,14 @@ pub trait DocAllocator<'a> {
     #[inline]
     fn text<U: Into<Cow<'a, str>>>(&'a self, data: U) -> DocBuilder<'a, Self> {
         let data: Cow<_> = data.into();
-        let doc = if data.is_empty() {
-            Doc::Nil.into()
-        } else {
-            match data {
-                Cow::Owned(t) => Doc::OwnedText(t.into()).into(),
-                Cow::Borrowed(t) => Doc::BorrowedText(t).into(),
-            }
+        if data.is_empty() {
+            return DocBuilder(self, Doc::Nil.into());
+        }
+        let doc = match data {
+            Cow::Owned(t) => Text::Owned(t.into()),
+            Cow::Borrowed(t) => Text::Borrowed(t),
         };
-        DocBuilder(self, doc).with_utf8_len()
+        DocBuilder::from_utf8_text(self, doc)
     }
 
     /// Allocate a document concatenating the given documents.
@@ -230,7 +222,7 @@ impl Default for Arena<'_> {
 
 impl<'a> Arena<'a> {
     pub fn new() -> Self {
-        Arena {
+        Self {
             docs: typed_arena::Arena::new(),
             column_fns: Default::default(),
         }
@@ -295,8 +287,11 @@ impl<'a> DocAllocator<'a> for Arena<'a> {
             Doc::Hardline => &Doc::Hardline,
             Doc::Fail => &Doc::Fail,
             // line()
-            Doc::FlatAlt(RefDoc(Doc::Hardline), RefDoc(Doc::BorrowedText(" "))) => {
-                &Doc::FlatAlt(RefDoc(&Doc::Hardline), RefDoc(&Doc::BorrowedText(" ")))
+            Doc::FlatAlt(RefDoc(Doc::Hardline), RefDoc(Doc::Text(Text::Borrowed(" ")))) => {
+                &Doc::FlatAlt(
+                    RefDoc(&Doc::Hardline),
+                    RefDoc(&Doc::Text(Text::Borrowed(" "))),
+                )
             }
             // line_()
             Doc::FlatAlt(RefDoc(Doc::Hardline), RefDoc(Doc::Nil)) => {
@@ -305,10 +300,10 @@ impl<'a> DocAllocator<'a> for Arena<'a> {
             // softline()
             Doc::Group(RefDoc(Doc::FlatAlt(
                 RefDoc(Doc::Hardline),
-                RefDoc(Doc::BorrowedText(" ")),
+                RefDoc(Doc::Text(Text::Borrowed(" "))),
             ))) => &Doc::Group(RefDoc(&Doc::FlatAlt(
                 RefDoc(&Doc::Hardline),
-                RefDoc(&Doc::BorrowedText(" ")),
+                RefDoc(&Doc::Text(Text::Borrowed(" "))),
             ))),
             // softline_()
             Doc::Group(RefDoc(Doc::FlatAlt(RefDoc(Doc::Hardline), RefDoc(Doc::Nil)))) => {
@@ -333,27 +328,5 @@ impl<'a> DocAllocator<'a> for Arena<'a> {
         f: impl Fn(isize) -> Self::Doc + 'a,
     ) -> <Self::Doc as DocPtr<'a>>::WidthFn {
         self.alloc_any(f)
-    }
-}
-
-enum FmtText {
-    Small(SmallText),
-    Large(String),
-}
-
-impl fmt::Write for FmtText {
-    fn write_str(&mut self, s: &str) -> fmt::Result {
-        match self {
-            FmtText::Small(buf) => {
-                if buf.try_push_str(s).is_err() {
-                    let mut new_str = String::with_capacity(buf.len() + s.len());
-                    new_str.push_str(buf);
-                    new_str.push_str(s);
-                    *self = FmtText::Large(new_str);
-                }
-            }
-            FmtText::Large(buf) => buf.push_str(s),
-        }
-        Ok(())
     }
 }

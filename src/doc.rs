@@ -1,6 +1,6 @@
 use std::{borrow::Cow, fmt, ops::Deref, rc::Rc};
 
-use crate::{BoxAllocator, DocAllocator, DocBuilder, Pretty, RcAllocator, SmallText};
+use crate::{text::Text, BoxAllocator, DocAllocator, DocBuilder, Pretty, RcAllocator};
 
 pub trait DocPtr<'a>: Deref<Target = Doc<'a, Self>> + Sized {
     type ColumnFn: Deref<Target = dyn Fn(usize) -> Self + 'a> + Clone + 'a;
@@ -22,21 +22,27 @@ pub enum Doc<'a, T>
 where
     T: DocPtr<'a>,
 {
+    // Primitives
     Nil,
-    Append(T, T),
-    Group(T),
-    FlatAlt(T, T),
-    Nest(isize, T),
+    Fail,
+
+    // Texts
+    Text(Text<'a>),
+    RenderLen(usize, T), // Stores the length of a string document that is not just ascii
     Hardline,
-    // Stores the length of a string document that is not just ascii
-    RenderLen(usize, T),
-    OwnedText(Box<str>),
-    BorrowedText(&'a str),
-    SmallText(SmallText),
-    Union(T, T),
+
+    // Structural
+    Append(T, T),   // sequencing
+    Nest(isize, T), // indenting
+
+    // Choices
+    Group(T),      // try flat vs broken
+    FlatAlt(T, T), // break vs flat
+    Union(T, T),   // alternative layouts
+
+    // Contextual
     Column(T::ColumnFn),
     Nesting(T::ColumnFn),
-    Fail,
 }
 
 impl<'a, T> Doc<'a, T>
@@ -93,7 +99,10 @@ where
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let is_line = |doc: &Doc<'a, T>| match doc {
             Doc::FlatAlt(x, y) => {
-                matches!((&**x, &**y), (Doc::Hardline, Doc::BorrowedText(" ")))
+                matches!(
+                    (&**x, &**y),
+                    (Doc::Hardline, Doc::Text(Text::Borrowed(" ")))
+                )
             }
             _ => false,
         };
@@ -127,9 +136,7 @@ where
             Doc::Nest(off, ref doc) => f.debug_tuple("Nest").field(&off).field(doc).finish(),
             Doc::Hardline => f.debug_tuple("Hardline").finish(),
             Doc::RenderLen(_, d) => d.fmt(f),
-            Doc::OwnedText(ref s) => s.fmt(f),
-            Doc::BorrowedText(ref s) => s.fmt(f),
-            Doc::SmallText(ref s) => s.fmt(f),
+            Doc::Text(s) => s.fmt(f),
             Doc::Union(ref l, ref r) => f.debug_tuple("Union").field(l).field(r).finish(),
             Doc::Column(_) => f.debug_tuple("Column(..)").finish(),
             Doc::Nesting(_) => f.debug_tuple("Nesting(..)").finish(),
@@ -350,7 +357,7 @@ macro_rules! impl_doc_methods {
 
             #[inline]
             pub fn space() -> Self {
-                Doc::BorrowedText(" ").into()
+                Doc::Text(Text::Borrowed(" ")).into()
             }
 
             #[inline]

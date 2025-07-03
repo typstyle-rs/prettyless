@@ -70,19 +70,7 @@ where
                     Doc::Nil => break,
                     Doc::Fail => return Err(out.fail_doc()),
 
-                    Doc::OwnedText(ref s) => {
-                        out.write_str_all(s)?;
-                        self.pos += s.len();
-                        fits &= self.pos <= self.width;
-                        break;
-                    }
-                    Doc::BorrowedText(s) => {
-                        out.write_str_all(s)?;
-                        self.pos += s.len();
-                        fits &= self.pos <= self.width;
-                        break;
-                    }
-                    Doc::SmallText(ref s) => {
+                    Doc::Text(ref s) => {
                         out.write_str_all(s)?;
                         self.pos += s.len();
                         fits &= self.pos <= self.width;
@@ -92,9 +80,7 @@ where
                     Doc::RenderLen(len, ref inner) => {
                         // inner must be a text node
                         let str = match **inner {
-                            Doc::OwnedText(ref s) => s,
-                            Doc::BorrowedText(s) => s,
-                            Doc::SmallText(ref s) => s,
+                            Doc::Text(ref s) => s,
                             _ => unreachable!(),
                         };
                         out.write_str_all(str)?;
@@ -203,21 +189,7 @@ where
                     Doc::Nil => break,
                     Doc::Fail => return false,
 
-                    Doc::OwnedText(ref s) => {
-                        pos += s.len();
-                        if pos > self.width {
-                            return false;
-                        }
-                        break;
-                    }
-                    Doc::BorrowedText(s) => {
-                        pos += s.len();
-                        if pos > self.width {
-                            return false;
-                        }
-                        break;
-                    }
-                    Doc::SmallText(ref s) => {
+                    Doc::Text(ref s) => {
                         pos += s.len();
                         if pos > self.width {
                             return false;

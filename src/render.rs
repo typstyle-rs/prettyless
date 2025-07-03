@@ -87,10 +87,3 @@ pub trait Render {
 
     fn fail_doc(&self) -> Self::Error;
 }
-
-macro_rules! make_spaces {
-    () => { "" };
-    ($s: tt $($t: tt)*) => { concat!("          ", make_spaces!($($t)*)) };
-}
-
-pub(crate) const SPACES: &str = make_spaces!(,,,,,,,,,,);

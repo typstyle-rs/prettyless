@@ -146,13 +146,12 @@ mod alloc;
 mod builder;
 mod doc;
 mod render;
+pub mod text;
 
 pub use alloc::{Arena, BoxAllocator, DocAllocator, RcAllocator};
 pub use builder::DocBuilder;
 pub use doc::{BoxDoc, BuildDoc, Doc, DocPtr, RcDoc, RefDoc};
 pub use render::{FmtWrite, IoWrite, Render};
-
-type SmallText = arrayvec::ArrayString<[u8; 22]>;
 
 /// Trait for types which can be converted to a `Document`
 pub trait Pretty<'a, D>
