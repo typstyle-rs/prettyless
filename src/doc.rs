@@ -1,6 +1,9 @@
 use std::{borrow::Cow, fmt, ops::Deref, rc::Rc};
 
-use crate::{text::Text, BoxAllocator, DocAllocator, DocBuilder, Pretty, RcAllocator};
+use crate::{
+    text::Text, visitor::visit_sequence_deep, BoxAllocator, DocAllocator, DocBuilder, Pretty,
+    RcAllocator,
+};
 
 pub trait DocPtr<'a>: Deref<Target = Doc<'a, Self>> + Sized {
     type ColumnFn: Deref<Target = dyn Fn(usize) -> Self + 'a> + Clone + 'a;
@@ -114,15 +117,24 @@ where
         };
         match self {
             Doc::Nil => f.debug_tuple("Nil").finish(),
+            Doc::Fail => f.debug_tuple("Fail").finish(),
+
+            Doc::Hardline => f.debug_tuple("Hardline").finish(),
+            Doc::RenderLen(_, d) => d.fmt(f),
+            Doc::Text(s) => s.fmt(f),
+
             Doc::Append(..) => {
                 let mut f = f.debug_list();
-                append_docs(self, &mut |doc| {
+                visit_sequence_deep(self, &mut |doc| {
                     f.entry(doc);
                 });
                 f.finish()
             }
+            Doc::Nest(off, ref doc) => f.debug_tuple("Nest").field(&off).field(doc).finish(),
+
             _ if is_line(self) => f.debug_tuple("Line").finish(),
             _ if is_line_(self) => f.debug_tuple("Line_").finish(),
+
             Doc::FlatAlt(ref x, ref y) => f.debug_tuple("FlatAlt").field(x).field(y).finish(),
             Doc::Group(ref doc) => {
                 if is_line(self) {
@@ -133,29 +145,10 @@ where
                 }
                 f.debug_tuple("Group").field(doc).finish()
             }
-            Doc::Nest(off, ref doc) => f.debug_tuple("Nest").field(&off).field(doc).finish(),
-            Doc::Hardline => f.debug_tuple("Hardline").finish(),
-            Doc::RenderLen(_, d) => d.fmt(f),
-            Doc::Text(s) => s.fmt(f),
             Doc::Union(ref l, ref r) => f.debug_tuple("Union").field(l).field(r).finish(),
+
             Doc::Column(_) => f.debug_tuple("Column(..)").finish(),
             Doc::Nesting(_) => f.debug_tuple("Nesting(..)").finish(),
-            Doc::Fail => f.debug_tuple("Fail").finish(),
-        }
-    }
-}
-
-fn append_docs<'a, 'd, T>(mut doc: &'d Doc<'a, T>, consumer: &mut impl FnMut(&'d Doc<'a, T>))
-where
-    T: DocPtr<'a>,
-{
-    loop {
-        match doc {
-            Doc::Append(l, r) => {
-                append_docs(l, consumer);
-                doc = r;
-            }
-            _ => break consumer(doc),
         }
     }
 }
@@ -242,6 +235,17 @@ macro_rules! impl_doc {
                 $allocator.text(data).into_doc()
             }
 
+            #[inline]
+            pub fn softline() -> Self {
+                Self::line().group()
+            }
+
+            /// A `softline_` acts like `nil` if the document fits the page, otherwise like `line_`
+            #[inline]
+            pub fn softline_() -> Self {
+                Self::line_().group()
+            }
+
             /// Append the given document after this document.
             #[inline]
             pub fn append<D>(self, that: D) -> Self
@@ -315,17 +319,6 @@ macro_rules! impl_doc {
             }
 
             #[inline]
-            pub fn softline() -> Self {
-                Self::line().group()
-            }
-
-            /// A `softline_` acts like `nil` if the document fits the page, otherwise like `line_`
-            #[inline]
-            pub fn softline_() -> Self {
-                Self::line_().group()
-            }
-
-            #[inline]
             pub fn column(f: impl Fn(usize) -> Self + 'static) -> Self {
                 DocBuilder(&$allocator, Doc::Column($allocator.alloc_column_fn(f)).into()).into_doc()
             }
@@ -349,6 +342,11 @@ macro_rules! impl_doc_methods {
                 Doc::Nil.into()
             }
 
+            #[inline]
+            pub fn fail() -> Self {
+                Doc::Fail.into()
+            }
+
             /// A single hardline.
             #[inline]
             pub fn hardline() -> Self {
@@ -358,11 +356,6 @@ macro_rules! impl_doc_methods {
             #[inline]
             pub fn space() -> Self {
                 Doc::Text(Text::Borrowed(" ")).into()
-            }
-
-            #[inline]
-            pub fn fail() -> Self {
-                Doc::Fail.into()
             }
         }
 
@@ -550,5 +543,25 @@ where
             Some(s) => s.into(),
             None => BuildDoc::Doc(Doc::Nil),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{Arena, DocAllocator};
+
+    #[test]
+    fn debug_concat() {
+        let a = Arena::new();
+        let doc = (a.text("1") + a.text("2")) + a.text("3") + a.text("4");
+        assert_eq!(
+            format!("{doc:#?}"),
+            r#"[
+    "1",
+    "2",
+    "3",
+    "4",
+]"#
+        )
     }
 }

@@ -156,6 +156,16 @@ pub trait DocAllocator<'a> {
         result
     }
 
+    /// Reflows `text` inserting `softline` in place of any whitespace
+    #[inline]
+    fn reflow(&'a self, text: &'a str) -> DocBuilder<'a, Self>
+    where
+        Self: Sized,
+        Self::Doc: Clone,
+    {
+        self.intersperse(text.split(char::is_whitespace), self.softline())
+    }
+
     /// Allocate a document that acts differently based on the position and page layout
     ///
     /// ```rust
@@ -188,16 +198,6 @@ pub trait DocAllocator<'a> {
     #[inline]
     fn nesting(&'a self, f: impl Fn(usize) -> Self::Doc + 'a) -> DocBuilder<'a, Self> {
         DocBuilder(self, Doc::Nesting(self.alloc_column_fn(f)).into())
-    }
-
-    /// Reflows `text` inserting `softline` in place of any whitespace
-    #[inline]
-    fn reflow(&'a self, text: &'a str) -> DocBuilder<'a, Self>
-    where
-        Self: Sized,
-        Self::Doc: Clone,
-    {
-        self.intersperse(text.split(char::is_whitespace), self.softline())
     }
 }
 

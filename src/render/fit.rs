@@ -1,4 +1,4 @@
-use crate::{Doc, DocPtr, Render};
+use crate::{visitor::visit_sequence_rev, Doc, DocPtr, Render};
 
 use super::write::{write_newline, BufferWrite};
 
@@ -105,7 +105,7 @@ where
 
                     Doc::Append(ref left, ref right) => {
                         // Push children in reverse so we process ldoc before rdoc
-                        cmd.doc = append_docs2(left, right, |doc| {
+                        cmd.doc = visit_sequence2(left, right, |doc| {
                             self.cmds.push(Cmd { indent, mode, doc })
                         });
                     }
@@ -211,7 +211,7 @@ where
 
                     Doc::Append(ref left, ref right) => {
                         // Push r then l so we process l first.
-                        doc = append_docs2(left, right, |d| self.fit_docs.push(d));
+                        doc = visit_sequence2(left, right, |d| self.fit_docs.push(d));
                     }
 
                     Doc::FlatAlt(ref break_doc, ref flat_doc) => {
@@ -243,7 +243,7 @@ where
     }
 }
 
-fn append_docs2<'a, 'd, T>(
+fn visit_sequence2<'a, 'd, T>(
     ldoc: &'d Doc<'a, T>,
     rdoc: &'d Doc<'a, T>,
     mut consumer: impl FnMut(&'d Doc<'a, T>),
@@ -251,28 +251,7 @@ fn append_docs2<'a, 'd, T>(
 where
     T: DocPtr<'a>,
 {
-    let d = append_docs(rdoc, &mut consumer);
+    let d = visit_sequence_rev(rdoc, &mut consumer);
     consumer(d);
-    append_docs(ldoc, &mut consumer)
-}
-
-fn append_docs<'a, 'd, T>(
-    mut doc: &'d Doc<'a, T>,
-    consumer: &mut impl FnMut(&'d Doc<'a, T>),
-) -> &'d Doc<'a, T>
-where
-    T: DocPtr<'a>,
-{
-    loop {
-        // Since appended documents often appear in sequence on the left side we
-        // gain a slight performance increase by batching these pushes (avoiding
-        // to push and directly pop `Append` documents)
-        match doc {
-            Doc::Append(l, r) => {
-                consumer(r);
-                doc = l;
-            }
-            _ => return doc,
-        }
-    }
+    visit_sequence_rev(ldoc, &mut consumer)
 }

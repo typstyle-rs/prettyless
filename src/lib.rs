@@ -147,6 +147,7 @@ mod builder;
 mod doc;
 mod render;
 pub mod text;
+pub(crate) mod visitor;
 
 pub use alloc::{Arena, BoxAllocator, DocAllocator, RcAllocator};
 pub use builder::DocBuilder;

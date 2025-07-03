@@ -29,6 +29,20 @@ where
         Self(allocator, doc.into())
     }
 
+    pub fn into_doc(self) -> D::Doc {
+        match self.1 {
+            BuildDoc::DocPtr(d) => d,
+            BuildDoc::Doc(d) => self.0.alloc(d),
+        }
+    }
+
+    pub(crate) fn into_plain_doc(self) -> Doc<'a, D::Doc> {
+        match self.1 {
+            BuildDoc::DocPtr(_) => unreachable!(),
+            BuildDoc::Doc(d) => d,
+        }
+    }
+
     /// Append the given document after this document.
     #[inline]
     pub fn append<E>(self, that: E) -> Self
@@ -294,41 +308,6 @@ where
     pub fn brackets(self) -> Self {
         self.enclose("[", "]")
     }
-
-    pub fn into_doc(self) -> D::Doc {
-        match self.1 {
-            BuildDoc::DocPtr(d) => d,
-            BuildDoc::Doc(d) => self.0.alloc(d),
-        }
-    }
-
-    pub(crate) fn into_plain_doc(self) -> Doc<'a, D::Doc> {
-        match self.1 {
-            BuildDoc::DocPtr(_) => unreachable!(),
-            BuildDoc::Doc(d) => d,
-        }
-    }
-}
-
-impl<'a, D, P> Add<P> for DocBuilder<'a, D>
-where
-    D: ?Sized + DocAllocator<'a>,
-    P: Pretty<'a, D>,
-{
-    type Output = Self;
-    fn add(self, other: P) -> Self::Output {
-        self.append(other)
-    }
-}
-
-impl<'a, D, P> AddAssign<P> for DocBuilder<'a, D>
-where
-    D: ?Sized + DocAllocator<'a>,
-    P: Pretty<'a, D>,
-{
-    fn add_assign(&mut self, other: P) {
-        *self = Self(self.0, std::mem::take(&mut self.1)).append(other)
-    }
 }
 
 impl<'a, D> Deref for DocBuilder<'a, D>
@@ -370,5 +349,26 @@ where
 {
     fn from(val: DocBuilder<'a, D>) -> Self {
         val.1
+    }
+}
+
+impl<'a, D, P> Add<P> for DocBuilder<'a, D>
+where
+    D: ?Sized + DocAllocator<'a>,
+    P: Pretty<'a, D>,
+{
+    type Output = Self;
+    fn add(self, other: P) -> Self::Output {
+        self.append(other)
+    }
+}
+
+impl<'a, D, P> AddAssign<P> for DocBuilder<'a, D>
+where
+    D: ?Sized + DocAllocator<'a>,
+    P: Pretty<'a, D>,
+{
+    fn add_assign(&mut self, other: P) {
+        *self = Self(self.0, std::mem::take(&mut self.1)).append(other)
     }
 }
