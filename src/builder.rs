@@ -86,8 +86,8 @@ where
     ///     )
     ///     .group();
     ///
-    /// assert_eq!(doc.1.pretty(100).to_string(), "let x in x");
-    /// assert_eq!(doc.1.pretty(8).to_string(), "let x\nx");
+    /// assert_eq!(doc.1.print(100).to_string(), "let x in x");
+    /// assert_eq!(doc.1.print(8).to_string(), "let x\nx");
     /// ```
     #[inline]
     pub fn flat_alt<E>(self, that: E) -> Self
@@ -163,7 +163,7 @@ where
     ///     arena.hardline(),
     ///     "next",
     /// ];
-    /// assert_eq!(doc.1.pretty(80).to_string(), "lorem ipsum\n      dolor\nnext");
+    /// assert_eq!(doc.1.print(80).to_string(), "lorem ipsum\n      dolor\nnext");
     /// ```
     #[inline]
     pub fn align(self) -> Self
@@ -191,7 +191,7 @@ where
     /// let doc = arena.text("prefix").append(arena.text(" "))
     ///     .append(arena.reflow("Indenting these words with nest").hang(4));
     /// assert_eq!(
-    ///     doc.1.pretty(24).to_string(),
+    ///     doc.1.print(24).to_string(),
     ///     "prefix Indenting these\n           words with\n           nest",
     /// );
     /// ```
@@ -215,7 +215,7 @@ where
     /// let doc = arena.text("prefix").append(arena.text(" "))
     ///     .append(arena.reflow("The indent function indents these words!").indent(4));
     /// assert_eq!(
-    ///     doc.1.pretty(24).to_string(),
+    ///     doc.1.print(24).to_string(),
     /// "
     /// prefix     The indent
     ///            function
@@ -256,7 +256,7 @@ where
     ///     .append(arena.column(|l| {
     ///         arena.text("| <- column ").append(arena.as_string(l)).into_doc()
     ///     }));
-    /// assert_eq!(doc.1.pretty(80).to_string(), "prefix | <- column 7");
+    /// assert_eq!(doc.1.print(80).to_string(), "prefix | <- column 7");
     /// ```
     #[inline]
     pub fn width(self, f: impl Fn(isize) -> D::Doc + 'a) -> Self

@@ -279,7 +279,7 @@ where
 ///     arena.softline(),
 ///     Some("123"),
 /// ];
-/// assert_eq!(doc.1.pretty(80).to_string(), "let x = 123");
+/// assert_eq!(doc.1.print(80).to_string(), "let x = 123");
 /// ```
 #[macro_export]
 macro_rules! docs {

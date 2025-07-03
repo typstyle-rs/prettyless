@@ -63,10 +63,10 @@ where
     /// let doc = BoxDoc::group(
     ///     BoxDoc::text("hello").append(Doc::line()).append(Doc::text("world"))
     /// );
-    /// assert_eq!(format!("{}", doc.pretty(80)), "hello world");
+    /// assert_eq!(format!("{}", doc.print(80)), "hello world");
     /// ```
     #[inline]
-    pub fn pretty<'d>(&'d self, width: usize) -> PrettyFmt<'a, 'd, T> {
+    pub fn print<'d>(&'d self, width: usize) -> PrettyFmt<'a, 'd, T> {
         PrettyFmt { doc: self, width }
     }
 }

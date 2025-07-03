@@ -73,8 +73,8 @@ pub trait DocAllocator<'a> {
     ///         .append(Doc::line_())
     ///         .append(Doc::text(")")),
     /// );
-    /// assert_eq!(doc.pretty(5).to_string(), "(\n  test\n  test\n)");
-    /// assert_eq!(doc.pretty(100).to_string(), "(test test)");
+    /// assert_eq!(doc.print(5).to_string(), "(\n  test\n  test\n)");
+    /// assert_eq!(doc.print(100).to_string(), "(test test)");
     /// ```
     #[inline]
     fn line_(&'a self) -> DocBuilder<'a, Self> {
@@ -176,7 +176,7 @@ pub trait DocAllocator<'a> {
     ///     .append(arena.column(|l| {
     ///         arena.text("| <- column ").append(arena.as_string(l)).into_doc()
     ///     }));
-    /// assert_eq!(doc.1.pretty(80).to_string(), "prefix | <- column 7");
+    /// assert_eq!(doc.1.print(80).to_string(), "prefix | <- column 7");
     /// ```
     #[inline]
     fn column(&'a self, f: impl Fn(usize) -> Self::Doc + 'a) -> DocBuilder<'a, Self> {
@@ -193,7 +193,7 @@ pub trait DocAllocator<'a> {
     ///     .append(arena.nesting(|l| {
     ///         arena.text("[Nested: ").append(arena.as_string(l)).append("]").into_doc()
     ///     }).nest(4));
-    /// assert_eq!(doc.1.pretty(80).to_string(), "prefix [Nested: 4]");
+    /// assert_eq!(doc.1.print(80).to_string(), "prefix [Nested: 4]");
     /// ```
     #[inline]
     fn nesting(&'a self, f: impl Fn(usize) -> Self::Doc + 'a) -> DocBuilder<'a, Self> {
