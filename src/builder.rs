@@ -65,6 +65,48 @@ where
         }
     }
 
+    /// Repeats `self` `n` times, appending each repetition.
+    ///
+    /// ```
+    /// use prettyless::{Arena, DocAllocator};
+    ///
+    /// let arena = Arena::new();
+    /// let doc = arena.text("[]");
+    ///
+    /// assert_eq!(doc.clone().repeat(0).1.print(100).to_string(), "");
+    /// assert_eq!(arena.len(), 0); // +0
+    ///
+    /// assert_eq!(doc.clone().repeat(1).1.print(100).to_string(), "[]");
+    /// assert_eq!(arena.len(), 0); // +0
+    ///
+    /// assert_eq!(doc.clone().repeat(2).1.print(100).to_string(), "[][]");
+    /// assert_eq!(arena.len(), 1); // +1
+    ///
+    /// assert_eq!(doc.clone().repeat(5).1.print(100).to_string(), "[][][][][]");
+    /// assert_eq!(arena.len(), 5); // +4
+    /// ```
+    pub fn repeat(self, n: usize) -> Self
+    where
+        D::Doc: Clone,
+    {
+        if n == 1 {
+            return self;
+        }
+
+        let Self(allocator, this) = self;
+        if n == 0 {
+            return Self(allocator, Doc::Nil.into());
+        }
+
+        let this = allocator.alloc_cow(this);
+        let mut doc = Doc::Append(this.clone(), this.clone());
+        for _ in 2..n {
+            doc = Doc::Append(allocator.alloc_cow(doc.into()), this.clone());
+        }
+
+        Self(allocator, doc.into())
+    }
+
     /// Acts as `self` when laid out on multiple lines and acts as `that` when laid out on a single line.
     ///
     /// ```

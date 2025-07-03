@@ -129,6 +129,26 @@ pub trait DocAllocator<'a> {
         DocBuilder::from_utf8_text(self, doc)
     }
 
+    /// Allocate a document containing n spaces.
+    fn spaces(&'a self, n: usize) -> DocBuilder<'a, Self> {
+        use crate::text::SPACES;
+
+        if n == 0 {
+            self.nil()
+        } else if n <= SPACES.len() {
+            self.text(&SPACES[..n])
+        } else {
+            let mut doc = self.nil();
+            let mut remaining = n;
+            while remaining != 0 {
+                let i = SPACES.len().min(remaining);
+                remaining -= i;
+                doc = doc.append(self.text(&SPACES[..i]))
+            }
+            doc
+        }
+    }
+
     /// Allocate a document concatenating the given documents.
     #[inline]
     fn concat<I>(&'a self, docs: I) -> DocBuilder<'a, Self>
@@ -238,6 +258,15 @@ impl<'a> Arena<'a> {
             docs: typed_arena::Arena::new(),
             column_fns: Default::default(),
         }
+    }
+
+    pub fn len(&self) -> usize {
+        self.docs.len() + self.column_fns.len()
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     fn alloc_any<T>(&'a self, f: T) -> &'a T
