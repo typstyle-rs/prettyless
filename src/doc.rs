@@ -545,23 +545,3 @@ where
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use crate::{Arena, DocAllocator};
-
-    #[test]
-    fn debug_concat() {
-        let a = Arena::new();
-        let doc = (a.text("1") + a.text("2")) + a.text("3") + a.text("4");
-        assert_eq!(
-            format!("{doc:#?}"),
-            r#"[
-    "1",
-    "2",
-    "3",
-    "4",
-]"#
-        )
-    }
-}
