@@ -42,7 +42,7 @@ pub trait DocAllocator<'a> {
     /// Allocate a single hardline.
     #[inline]
     fn hardline(&'a self) -> DocBuilder<'a, Self> {
-        DocBuilder(self, Doc::Hardline.into())
+        DocBuilder(self, Doc::HardLine.into())
     }
 
     #[inline]
@@ -91,6 +91,18 @@ pub trait DocAllocator<'a> {
     #[inline]
     fn softline_(&'a self) -> DocBuilder<'a, Self> {
         self.line_().group()
+    }
+
+    /// Equivalent to `self.nil().flat_alt(doc.pretty(self))`
+    #[inline]
+    fn if_group_flat(&'a self, doc: impl Pretty<'a, Self>) -> DocBuilder<'a, Self> {
+        self.nil().flat_alt(doc.pretty(self))
+    }
+
+    /// Equivalent to `doc.pretty(self).flat_alt(self.nil())`
+    #[inline]
+    fn if_group_break(&'a self, doc: impl Pretty<'a, Self>) -> DocBuilder<'a, Self> {
+        doc.pretty(self).flat_alt(self.nil())
     }
 
     /// Allocate a document containing the text `t.to_string()`.
@@ -173,14 +185,14 @@ pub trait DocAllocator<'a> {
     ///
     /// let arena = prettyless::Arena::new();
     /// let doc = arena.text("prefix ")
-    ///     .append(arena.column(|l| {
+    ///     .append(arena.on_column(|l| {
     ///         arena.text("| <- column ").append(arena.as_string(l)).into_doc()
     ///     }));
     /// assert_eq!(doc.1.print(80).to_string(), "prefix | <- column 7");
     /// ```
     #[inline]
-    fn column(&'a self, f: impl Fn(usize) -> Self::Doc + 'a) -> DocBuilder<'a, Self> {
-        DocBuilder(self, Doc::Column(self.alloc_column_fn(f)).into())
+    fn on_column(&'a self, f: impl Fn(usize) -> Self::Doc + 'a) -> DocBuilder<'a, Self> {
+        DocBuilder(self, Doc::OnColumn(self.alloc_column_fn(f)).into())
     }
 
     /// Allocate a document that acts differently based on the current nesting level
@@ -190,14 +202,14 @@ pub trait DocAllocator<'a> {
     ///
     /// let arena = prettyless::Arena::new();
     /// let doc = arena.text("prefix ")
-    ///     .append(arena.nesting(|l| {
+    ///     .append(arena.on_nesting(|l| {
     ///         arena.text("[Nested: ").append(arena.as_string(l)).append("]").into_doc()
     ///     }).nest(4));
     /// assert_eq!(doc.1.print(80).to_string(), "prefix [Nested: 4]");
     /// ```
     #[inline]
-    fn nesting(&'a self, f: impl Fn(usize) -> Self::Doc + 'a) -> DocBuilder<'a, Self> {
-        DocBuilder(self, Doc::Nesting(self.alloc_column_fn(f)).into())
+    fn on_nesting(&'a self, f: impl Fn(usize) -> Self::Doc + 'a) -> DocBuilder<'a, Self> {
+        DocBuilder(self, Doc::OnNesting(self.alloc_column_fn(f)).into())
     }
 }
 
@@ -284,31 +296,31 @@ impl<'a> DocAllocator<'a> for Arena<'a> {
         RefDoc(match doc {
             // Return 'static references for common variants to avoid some allocations
             Doc::Nil => &Doc::Nil,
-            Doc::Hardline => &Doc::Hardline,
+            Doc::HardLine => &Doc::HardLine,
             Doc::Fail => &Doc::Fail,
             // line()
-            Doc::FlatAlt(RefDoc(Doc::Hardline), RefDoc(Doc::Text(Text::Borrowed(" ")))) => {
-                &Doc::FlatAlt(
-                    RefDoc(&Doc::Hardline),
+            Doc::BreakOrFlat(RefDoc(Doc::HardLine), RefDoc(Doc::Text(Text::Borrowed(" ")))) => {
+                &Doc::BreakOrFlat(
+                    RefDoc(&Doc::HardLine),
                     RefDoc(&Doc::Text(Text::Borrowed(" "))),
                 )
             }
             // line_()
-            Doc::FlatAlt(RefDoc(Doc::Hardline), RefDoc(Doc::Nil)) => {
-                &Doc::FlatAlt(RefDoc(&Doc::Hardline), RefDoc(&Doc::Nil))
+            Doc::BreakOrFlat(RefDoc(Doc::HardLine), RefDoc(Doc::Nil)) => {
+                &Doc::BreakOrFlat(RefDoc(&Doc::HardLine), RefDoc(&Doc::Nil))
             }
             // softline()
-            Doc::Group(RefDoc(Doc::FlatAlt(
-                RefDoc(Doc::Hardline),
+            Doc::Group(RefDoc(Doc::BreakOrFlat(
+                RefDoc(Doc::HardLine),
                 RefDoc(Doc::Text(Text::Borrowed(" "))),
-            ))) => &Doc::Group(RefDoc(&Doc::FlatAlt(
-                RefDoc(&Doc::Hardline),
+            ))) => &Doc::Group(RefDoc(&Doc::BreakOrFlat(
+                RefDoc(&Doc::HardLine),
                 RefDoc(&Doc::Text(Text::Borrowed(" "))),
             ))),
             // softline_()
-            Doc::Group(RefDoc(Doc::FlatAlt(RefDoc(Doc::Hardline), RefDoc(Doc::Nil)))) => {
-                &Doc::Group(RefDoc(&Doc::FlatAlt(
-                    RefDoc(&Doc::Hardline),
+            Doc::Group(RefDoc(Doc::BreakOrFlat(RefDoc(Doc::HardLine), RefDoc(Doc::Nil)))) => {
+                &Doc::Group(RefDoc(&Doc::BreakOrFlat(
+                    RefDoc(&Doc::HardLine),
                     RefDoc(&Doc::Nil),
                 )))
             }

@@ -31,21 +31,21 @@ where
 
     // Texts
     Text(Text<'a>),
-    RenderLen(usize, T), // Stores the length of a string document that is not just ascii
-    Hardline,
+    TextWithLen(usize, T), // Stores the length of a string document that is not just ascii
+    HardLine,
 
     // Structural
     Append(T, T),   // sequencing
     Nest(isize, T), // indenting
 
     // Choices
-    Group(T),      // try flat vs broken
-    FlatAlt(T, T), // break vs flat
-    Union(T, T),   // alternative layouts
+    Group(T),          // try flat vs broken
+    BreakOrFlat(T, T), // break vs flat
+    Union(T, T),       // alternative layouts
 
     // Contextual
-    Column(T::ColumnFn),
-    Nesting(T::ColumnFn),
+    OnColumn(T::ColumnFn),
+    OnNesting(T::ColumnFn),
 }
 
 impl<'a, T> Doc<'a, T>
@@ -101,17 +101,17 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let is_line = |doc: &Doc<'a, T>| match doc {
-            Doc::FlatAlt(x, y) => {
+            Doc::BreakOrFlat(x, y) => {
                 matches!(
                     (&**x, &**y),
-                    (Doc::Hardline, Doc::Text(Text::Borrowed(" ")))
+                    (Doc::HardLine, Doc::Text(Text::Borrowed(" ")))
                 )
             }
             _ => false,
         };
         let is_line_ = |doc: &Doc<'a, T>| match doc {
-            Doc::FlatAlt(x, y) => {
-                matches!((&**x, &**y), (Doc::Hardline, Doc::Nil))
+            Doc::BreakOrFlat(x, y) => {
+                matches!((&**x, &**y), (Doc::HardLine, Doc::Nil))
             }
             _ => false,
         };
@@ -119,8 +119,8 @@ where
             Doc::Nil => f.debug_tuple("Nil").finish(),
             Doc::Fail => f.debug_tuple("Fail").finish(),
 
-            Doc::Hardline => f.debug_tuple("Hardline").finish(),
-            Doc::RenderLen(_, d) => d.fmt(f),
+            Doc::HardLine => f.debug_tuple("HardLine").finish(),
+            Doc::TextWithLen(_, d) => d.fmt(f),
             Doc::Text(s) => s.fmt(f),
 
             Doc::Append(..) => {
@@ -132,23 +132,25 @@ where
             }
             Doc::Nest(off, ref doc) => f.debug_tuple("Nest").field(&off).field(doc).finish(),
 
-            _ if is_line(self) => f.debug_tuple("Line").finish(),
-            _ if is_line_(self) => f.debug_tuple("Line_").finish(),
+            _ if is_line(self) => f.debug_tuple("LineOrSpace").finish(),
+            _ if is_line_(self) => f.debug_tuple("LineOrNil").finish(),
 
-            Doc::FlatAlt(ref x, ref y) => f.debug_tuple("FlatAlt").field(x).field(y).finish(),
+            Doc::BreakOrFlat(ref x, ref y) => {
+                f.debug_tuple("FlatOrBreak").field(y).field(x).finish()
+            }
             Doc::Group(ref doc) => {
                 if is_line(self) {
-                    return f.debug_tuple("SoftLine").finish();
+                    f.debug_tuple("SoftLineOrSpace").finish()
+                } else if is_line_(self) {
+                    f.debug_tuple("SoftLineOrNil").finish()
+                } else {
+                    f.debug_tuple("Group").field(doc).finish()
                 }
-                if is_line_(self) {
-                    return f.debug_tuple("SoftLine_").finish();
-                }
-                f.debug_tuple("Group").field(doc).finish()
             }
             Doc::Union(ref l, ref r) => f.debug_tuple("Union").field(l).field(r).finish(),
 
-            Doc::Column(_) => f.debug_tuple("Column(..)").finish(),
-            Doc::Nesting(_) => f.debug_tuple("Nesting(..)").finish(),
+            Doc::OnColumn(_) => f.debug_tuple("OnColumn(..)").finish(),
+            Doc::OnNesting(_) => f.debug_tuple("OnNesting(..)").finish(),
         }
     }
 }
@@ -320,12 +322,12 @@ macro_rules! impl_doc {
 
             #[inline]
             pub fn column(f: impl Fn(usize) -> Self + 'static) -> Self {
-                DocBuilder(&$allocator, Doc::Column($allocator.alloc_column_fn(f)).into()).into_doc()
+                DocBuilder(&$allocator, Doc::OnColumn($allocator.alloc_column_fn(f)).into()).into_doc()
             }
 
             #[inline]
             pub fn nesting(f: impl Fn(usize) -> Self + 'static) -> Self {
-                DocBuilder(&$allocator, Doc::Nesting($allocator.alloc_column_fn(f)).into()).into_doc()
+                DocBuilder(&$allocator, Doc::OnNesting($allocator.alloc_column_fn(f)).into()).into_doc()
             }
         }
     };
@@ -350,7 +352,7 @@ macro_rules! impl_doc_methods {
             /// A single hardline.
             #[inline]
             pub fn hardline() -> Self {
-                Doc::Hardline.into()
+                Doc::HardLine.into()
             }
 
             #[inline]

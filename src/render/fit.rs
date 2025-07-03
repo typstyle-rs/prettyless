@@ -77,7 +77,7 @@ where
                         break;
                     }
 
-                    Doc::RenderLen(len, ref inner) => {
+                    Doc::TextWithLen(len, ref inner) => {
                         // inner must be a text node
                         let str = match **inner {
                             Doc::Text(ref s) => s,
@@ -89,7 +89,7 @@ where
                         break;
                     }
 
-                    Doc::Hardline => {
+                    Doc::HardLine => {
                         // The next document may have different indentation so we should use it if
                         // we can
                         if let Some(next) = self.cmds.pop() {
@@ -121,7 +121,7 @@ where
                         }
                         cmd.doc = inner;
                     }
-                    Doc::FlatAlt(ref break_doc, ref flat_doc) => {
+                    Doc::BreakOrFlat(ref break_doc, ref flat_doc) => {
                         cmd.doc = match mode {
                             Mode::Break => break_doc,
                             Mode::Flat => flat_doc,
@@ -150,10 +150,10 @@ where
                         }
                     }
 
-                    Doc::Column(ref f) => {
+                    Doc::OnColumn(ref f) => {
                         cmd.doc = self.temp_arena.alloc(f(self.pos));
                     }
-                    Doc::Nesting(ref f) => {
+                    Doc::OnNesting(ref f) => {
                         cmd.doc = self.temp_arena.alloc(f(indent));
                     }
                 }
@@ -196,7 +196,7 @@ where
                         }
                         break;
                     }
-                    Doc::RenderLen(len, _) => {
+                    Doc::TextWithLen(len, _) => {
                         pos += len;
                         if pos > self.width {
                             return false;
@@ -204,7 +204,7 @@ where
                         break;
                     }
 
-                    Doc::Hardline => {
+                    Doc::HardLine => {
                         // A hardline only “fits” in break mode.
                         return mode == Mode::Break;
                     }
@@ -214,7 +214,7 @@ where
                         doc = visit_sequence2(left, right, |d| self.fit_docs.push(d));
                     }
 
-                    Doc::FlatAlt(ref break_doc, ref flat_doc) => {
+                    Doc::BreakOrFlat(ref break_doc, ref flat_doc) => {
                         // Select branch based on current mode.
                         doc = if mode == Mode::Break {
                             break_doc
@@ -227,11 +227,11 @@ where
                         doc = inner;
                     }
 
-                    Doc::Column(ref f) => {
+                    Doc::OnColumn(ref f) => {
                         doc = self.temp_arena.alloc(f(pos));
                     }
 
-                    Doc::Nesting(ref f) => {
+                    Doc::OnNesting(ref f) => {
                         doc = self.temp_arena.alloc(f(indent));
                     }
                 }

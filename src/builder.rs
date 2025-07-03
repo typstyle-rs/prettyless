@@ -23,7 +23,7 @@ where
             Doc::Text(text)
         } else {
             let display_width = unicode_width::UnicodeWidthStr::width(s);
-            Doc::RenderLen(display_width, allocator.alloc(Doc::Text(text)))
+            Doc::TextWithLen(display_width, allocator.alloc(Doc::Text(text)))
         };
 
         Self(allocator, doc.into())
@@ -98,8 +98,44 @@ where
         let that = that.pretty(allocator);
         Self(
             allocator,
-            Doc::FlatAlt(allocator.alloc_cow(this), allocator.alloc_cow(that.into())).into(),
+            Doc::BreakOrFlat(allocator.alloc_cow(this), allocator.alloc_cow(that.into())).into(),
         )
+    }
+
+    /// Equivalent to `nil.flat_alt(self)`
+    /// ```
+    /// use prettyless::{Arena, DocAllocator};
+    ///
+    /// let arena = Arena::new();
+    /// let doc = arena.text("flat-only").when_group_flat().group();
+    ///
+    /// assert_eq!(doc.1.print(0).to_string(), "");
+    /// assert_eq!(doc.1.print(10).to_string(), "flat-only");
+    /// ```
+    #[inline]
+    pub fn when_group_flat(self) -> Self {
+        let Self(allocator, this) = self;
+        allocator.if_group_flat(this)
+    }
+
+    /// Equivalent to `self.flat_alt(nil)`
+    /// ```
+    /// use prettyless::{Arena, DocAllocator};
+    ///
+    /// let arena = Arena::new();
+    /// let doc = arena.text("a")
+    ///     .append(arena.text(",").when_group_break())
+    ///     .enclose(arena.line_(), arena.line_())
+    ///     .parens()
+    ///     .group();
+    ///
+    /// assert_eq!(doc.1.print(1).to_string(), "(\na,\n)");
+    /// assert_eq!(doc.1.print(10).to_string(), "(a)");
+    /// ```
+    #[inline]
+    pub fn when_group_break(self) -> Self {
+        let Self(allocator, this) = self;
+        allocator.if_group_break(this)
     }
 
     /// Mark this document as a group.
@@ -171,10 +207,10 @@ where
         Self: Clone,
     {
         let allocator = self.0;
-        allocator.column(move |col| {
+        allocator.on_column(move |col| {
             let self_ = self.clone();
             allocator
-                .nesting(move |nest| self_.clone().nest(col as isize - nest as isize).into_doc())
+                .on_nesting(move |nest| self_.clone().nest(col as isize - nest as isize).into_doc())
                 .into_doc()
         })
     }
@@ -247,29 +283,18 @@ where
     ///
     /// NOTE: The doc pointer type, `D` may need to be cloned. Consider using cheaply cloneable ptr
     /// like `RefDoc` or `RcDoc`
-    ///
-    /// ```rust
-    /// use prettyless::DocAllocator;
-    ///
-    /// let arena = prettyless::Arena::new();
-    /// let doc = arena.text("prefix ")
-    ///     .append(arena.column(|l| {
-    ///         arena.text("| <- column ").append(arena.as_string(l)).into_doc()
-    ///     }));
-    /// assert_eq!(doc.1.print(80).to_string(), "prefix | <- column 7");
-    /// ```
     #[inline]
-    pub fn width(self, f: impl Fn(isize) -> D::Doc + 'a) -> Self
+    pub fn measure_width(self, f: impl Fn(isize) -> D::Doc + 'a) -> Self
     where
         BuildDoc<'a, D::Doc>: Clone,
     {
         let Self(allocator, this) = self;
         let f = allocator.alloc_width_fn(f);
-        allocator.column(move |start| {
+        allocator.on_column(move |start| {
             let f = f.clone();
 
             Self(allocator, this.clone())
-                .append(allocator.column(move |end| f(end as isize - start as isize)))
+                .append(allocator.on_column(move |end| f(end as isize - start as isize)))
                 .into_doc()
         })
     }
