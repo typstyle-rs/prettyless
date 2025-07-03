@@ -116,7 +116,8 @@ where
                     }
 
                     Doc::Group(ref inner) => {
-                        if mode == Mode::Break && self.fitting(inner, self.pos, indent) {
+                        if mode == Mode::Break && self.fitting(inner, self.pos, indent, Mode::Flat)
+                        {
                             cmd.mode = Mode::Flat;
                         }
                         cmd.doc = inner;
@@ -149,6 +150,13 @@ where
                             cmd.doc = right;
                         }
                     }
+                    Doc::QuickUnion(ref left, ref right) => {
+                        if self.fitting(left, self.pos, indent, Mode::Break) {
+                            cmd.doc = left;
+                        } else {
+                            cmd.doc = right;
+                        }
+                    }
 
                     Doc::OnColumn(ref f) => {
                         cmd.doc = self.temp_arena.alloc(f(self.pos));
@@ -163,10 +171,15 @@ where
         Ok(fits)
     }
 
-    fn fitting(&mut self, next: &'d Doc<'a, T>, mut pos: usize, indent: usize) -> bool {
+    fn fitting(
+        &mut self,
+        next: &'d Doc<'a, T>,
+        mut pos: usize,
+        indent: usize,
+        mut mode: Mode,
+    ) -> bool {
         // We start in "flat" mode and may fall back to "break" mode when backtracking.
         let mut cmd_bottom = self.cmds.len();
-        let mut mode = Mode::Flat;
 
         // fit_docs is our work‐stack for documents to check in flat mode.
         self.fit_docs.clear();
@@ -223,7 +236,10 @@ where
                         };
                     }
 
-                    Doc::Nest(_, ref inner) | Doc::Group(ref inner) | Doc::Union(_, ref inner) => {
+                    Doc::Nest(_, ref inner)
+                    | Doc::Group(ref inner)
+                    | Doc::Union(_, ref inner)
+                    | Doc::QuickUnion(_, ref inner) => {
                         doc = inner;
                     }
 

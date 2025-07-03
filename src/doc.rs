@@ -42,6 +42,7 @@ where
     Group(T),          // try flat vs broken
     BreakOrFlat(T, T), // break vs flat
     Union(T, T),       // alternative layouts
+    QuickUnion(T, T),  // like union, but only fit on the first line
 
     // Contextual
     OnColumn(T::ColumnFn),
@@ -148,6 +149,7 @@ where
                 _ => f.debug_tuple("Group").field(doc).finish(),
             },
             Doc::Union(ref l, ref r) => f.debug_tuple("Union").field(l).field(r).finish(),
+            Doc::QuickUnion(ref l, ref r) => f.debug_tuple("QuickUnion").field(l).field(r).finish(),
 
             Doc::OnColumn(_) => f.write_str("OnColumn(..)"),
             Doc::OnNesting(_) => f.write_str("OnNesting(..)"),
