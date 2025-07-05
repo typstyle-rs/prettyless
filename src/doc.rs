@@ -100,26 +100,11 @@ where
     T: DocPtr<'a> + fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let is_line = |doc: &Doc<'a, T>| match doc {
-            Doc::BreakOrFlat(x, y) => {
-                matches!(
-                    (&**x, &**y),
-                    (Doc::HardLine, Doc::Text(Text::Borrowed(" ")))
-                )
-            }
-            _ => false,
-        };
-        let is_line_ = |doc: &Doc<'a, T>| match doc {
-            Doc::BreakOrFlat(x, y) => {
-                matches!((&**x, &**y), (Doc::HardLine, Doc::Nil))
-            }
-            _ => false,
-        };
         match self {
-            Doc::Nil => f.debug_tuple("Nil").finish(),
-            Doc::Fail => f.debug_tuple("Fail").finish(),
+            Doc::Nil => f.write_str("Nil"),
+            Doc::Fail => f.write_str("Fail"),
 
-            Doc::HardLine => f.debug_tuple("HardLine").finish(),
+            Doc::HardLine => f.write_str("HardLine"),
             Doc::TextWithLen(_, d) => d.fmt(f),
             Doc::Text(s) => s.fmt(f),
 
@@ -130,27 +115,42 @@ where
                 });
                 f.finish()
             }
-            Doc::Nest(off, ref doc) => f.debug_tuple("Nest").field(&off).field(doc).finish(),
-
-            _ if is_line(self) => f.debug_tuple("LineOrSpace").finish(),
-            _ if is_line_(self) => f.debug_tuple("LineOrNil").finish(),
-
-            Doc::BreakOrFlat(ref x, ref y) => {
-                f.debug_tuple("FlatOrBreak").field(y).field(x).finish()
+            Doc::Nest(off, ref doc) => {
+                write!(f, "Nest({off}, ",)?;
+                doc.fmt(f)?;
+                write!(f, ")")
             }
-            Doc::Group(ref doc) => {
-                if is_line(self) {
-                    f.debug_tuple("SoftLineOrSpace").finish()
-                } else if is_line_(self) {
-                    f.debug_tuple("SoftLineOrNil").finish()
-                } else {
-                    f.debug_tuple("Group").field(doc).finish()
+
+            Doc::BreakOrFlat(ref x, ref y) => match (&**x, &**y) {
+                (Doc::HardLine, Doc::Text(Text::Borrowed(" "))) => f.write_str("LineOrSpace"),
+                (Doc::HardLine, Doc::Nil) => f.write_str("LineOrNil"),
+                (_, Doc::Nil) => f.debug_tuple("WhenBreak").field(x).finish(),
+                (Doc::Nil, _) => f.debug_tuple("WhenFlat").field(y).finish(),
+                _ => f.debug_tuple("FlatOrBreak").field(y).field(x).finish(),
+            },
+            Doc::Group(ref doc) => match &**doc {
+                Doc::BreakOrFlat(x, y)
+                    if matches!(
+                        (&**x, &**y),
+                        (Doc::HardLine, Doc::Text(Text::Borrowed(" ")))
+                    ) =>
+                {
+                    f.write_str("SoftLineOrSpace")
                 }
-            }
+                Doc::BreakOrFlat(x, y) if matches!((&**x, &**y), (Doc::HardLine, Doc::Nil)) => {
+                    f.write_str("SoftLineOrNil")
+                }
+                Doc::Append(_, _) => {
+                    f.write_str("Group(")?;
+                    doc.fmt(f)?;
+                    f.write_str(")")
+                }
+                _ => f.debug_tuple("Group").field(doc).finish(),
+            },
             Doc::Union(ref l, ref r) => f.debug_tuple("Union").field(l).field(r).finish(),
 
-            Doc::OnColumn(_) => f.debug_tuple("OnColumn(..)").finish(),
-            Doc::OnNesting(_) => f.debug_tuple("OnNesting(..)").finish(),
+            Doc::OnColumn(_) => f.write_str("OnColumn(..)"),
+            Doc::OnNesting(_) => f.write_str("OnNesting(..)"),
         }
     }
 }
