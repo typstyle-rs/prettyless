@@ -39,13 +39,21 @@ where
     doc: &'d Doc<'a, T>,
 }
 
+struct FitCmd<'d, 'a, T>
+where
+    T: DocPtr<'a> + 'a,
+{
+    mode: Mode,
+    doc: &'d Doc<'a, T>,
+}
+
 struct Printer<'d, 'a, T>
 where
     T: DocPtr<'a> + 'a,
 {
     pos: usize,
     cmds: Vec<Cmd<'d, 'a, T>>,
-    fit_docs: Vec<&'d Doc<'a, T>>,
+    fit_docs: Vec<FitCmd<'d, 'a, T>>,
     width: usize,
     temp_arena: &'d typed_arena::Arena<T>,
 }
@@ -115,6 +123,10 @@ where
                         cmd.doc = inner;
                     }
 
+                    Doc::Flatten(ref inner) => {
+                        cmd.mode = Mode::Flat;
+                        cmd.doc = inner;
+                    }
                     Doc::Group(ref inner) => {
                         if mode == Mode::Break && self.fitting(inner, self.pos, indent, Mode::Flat)
                         {
@@ -129,6 +141,11 @@ where
                         };
                     }
                     Doc::Union(ref left, ref right) => {
+                        if mode == Mode::Flat {
+                            cmd.doc = left;
+                            continue;
+                        }
+
                         // Try the left branch in a buffer
                         let save_pos = self.pos;
                         let save_cmds = self.cmds.len();
@@ -151,7 +168,7 @@ where
                         }
                     }
                     Doc::QuickUnion(ref left, ref right) => {
-                        if self.fitting(left, self.pos, indent, Mode::Break) {
+                        if mode == Mode::Flat || self.fitting(left, self.pos, indent, Mode::Break) {
                             cmd.doc = left;
                         } else {
                             cmd.doc = right;
@@ -171,30 +188,24 @@ where
         Ok(fits)
     }
 
-    fn fitting(
-        &mut self,
-        next: &'d Doc<'a, T>,
-        mut pos: usize,
-        indent: usize,
-        mut mode: Mode,
-    ) -> bool {
+    fn fitting(&mut self, next: &'d Doc<'a, T>, mut pos: usize, indent: usize, mode: Mode) -> bool {
         // We start in "flat" mode and may fall back to "break" mode when backtracking.
         let mut cmd_bottom = self.cmds.len();
 
         // fit_docs is our work‐stack for documents to check in flat mode.
         self.fit_docs.clear();
-        self.fit_docs.push(next);
+        self.fit_docs.push(FitCmd { mode, doc: next });
 
         // As long as we have either flat‐stack items or break commands to try...
         while cmd_bottom > 0 || !self.fit_docs.is_empty() {
             // Pop the next doc to inspect, or backtrack to bcmds in break mode.
-            let mut doc = if let Some(d) = self.fit_docs.pop() {
-                d
-            } else {
-                mode = Mode::Break;
+            let FitCmd { mut mode, mut doc } = self.fit_docs.pop().unwrap_or_else(|| {
                 cmd_bottom -= 1;
-                self.cmds[cmd_bottom].doc
-            };
+                FitCmd {
+                    mode: Mode::Break,
+                    doc: self.cmds[cmd_bottom].doc,
+                }
+            });
 
             // Drill into this doc until we either bail or consume a leaf.
             loop {
@@ -224,9 +235,15 @@ where
 
                     Doc::Append(ref left, ref right) => {
                         // Push r then l so we process l first.
-                        doc = visit_sequence2(left, right, |d| self.fit_docs.push(d));
+                        doc = visit_sequence2(left, right, |doc| {
+                            self.fit_docs.push(FitCmd { mode, doc })
+                        });
                     }
 
+                    Doc::Flatten(ref inner) => {
+                        mode = Mode::Flat;
+                        doc = inner;
+                    }
                     Doc::BreakOrFlat(ref break_doc, ref flat_doc) => {
                         // Select branch based on current mode.
                         doc = if mode == Mode::Break {
@@ -234,6 +251,13 @@ where
                         } else {
                             flat_doc
                         };
+                    }
+
+                    Doc::Union(ref inner, _) | Doc::QuickUnion(ref inner, _)
+                        if mode == Mode::Flat =>
+                    {
+                        // In flat mode we only consider the first branch.
+                        doc = inner;
                     }
 
                     Doc::Nest(_, ref inner)

@@ -180,6 +180,19 @@ where
         allocator.if_group_break(this)
     }
 
+    /// Flatten inner docs. Hard line will turn to failure.
+    #[inline]
+    pub fn flatten(self) -> Self {
+        let Self(allocator, this) = self;
+        match *this {
+            Doc::Nil | Doc::Text(_) | Doc::TextWithLen(_, _) | Doc::Flatten(_) => {
+                Self(allocator, this)
+            }
+            Doc::HardLine => self.0.fail(),
+            _ => DocBuilder(allocator, Doc::Flatten(allocator.alloc_cow(this)).into()),
+        }
+    }
+
     /// Mark this document as a group.
     ///
     /// Groups are layed out on a single line if possible.  Within a group, all basic documents with
@@ -189,7 +202,7 @@ where
     #[inline]
     pub fn group(self) -> Self {
         match *self.1 {
-            Doc::Group(_) | Doc::Text(_) | Doc::Nil => self,
+            Doc::Nil | Doc::Text(_) | Doc::TextWithLen(_, _) | Doc::Group(_) => self,
             _ => {
                 let Self(allocator, this) = self;
                 Self(allocator, Doc::Group(allocator.alloc_cow(this)).into())

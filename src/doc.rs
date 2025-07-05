@@ -39,6 +39,7 @@ where
     Nest(isize, T), // indenting
 
     // Choices
+    Flatten(T),        // always flat inside
     Group(T),          // try flat vs broken
     BreakOrFlat(T, T), // break vs flat
     Union(T, T),       // alternative layouts
@@ -129,6 +130,15 @@ where
                 (Doc::Nil, _) => f.debug_tuple("WhenFlat").field(y).finish(),
                 _ => f.debug_tuple("FlatOrBreak").field(y).field(x).finish(),
             },
+            Doc::Flatten(ref doc) => {
+                if matches!(**doc, Doc::Append(_, _)) {
+                    f.write_str("Flatten(")?;
+                    doc.fmt(f)?;
+                    f.write_str(")")
+                } else {
+                    f.debug_tuple("Flatten").field(doc).finish()
+                }
+            }
             Doc::Group(ref doc) => match &**doc {
                 Doc::BreakOrFlat(x, y)
                     if matches!(
