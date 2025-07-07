@@ -226,6 +226,14 @@ where
         )
     }
 
+    /// ```
+    /// use prettyless::{Arena, DocAllocator};
+    ///
+    /// let arena = Arena::new();
+    /// let doc = (arena.text("short") + arena.hardline() + arena.text("long long long"))
+    ///        .union(arena.text("short") + arena.hardline() + arena.text("short"));
+    /// assert_eq!(doc.print(10).to_string(), "short\nshort");
+    /// ```
     #[inline]
     pub fn union<E>(self, other: E) -> Self
     where
@@ -238,14 +246,23 @@ where
     }
 
     /// Like `union`, but it only ensures fitting on the first line.
+    ///
+    /// ```
+    /// use prettyless::{Arena, DocAllocator};
+    ///
+    /// let arena = Arena::new();
+    /// let doc = (arena.text("short") + arena.hardline() + arena.text("long long long"))
+    ///        .partial_union(arena.text("short") + arena.hardline() + arena.text("short"));
+    /// assert_eq!(doc.print(10).to_string(), "short\nlong long long");
+    /// ```
     #[inline]
-    pub fn quick_union<E>(self, other: E) -> Self
+    pub fn partial_union<E>(self, other: E) -> Self
     where
         E: Into<BuildDoc<'a, D::Doc>>,
     {
         let Self(allocator, this) = self;
         let other = other.into();
-        let doc = Doc::QuickUnion(allocator.alloc_cow(this), allocator.alloc_cow(other));
+        let doc = Doc::PartialUnion(allocator.alloc_cow(this), allocator.alloc_cow(other));
         Self(allocator, doc.into())
     }
 

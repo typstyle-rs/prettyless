@@ -167,7 +167,7 @@ where
                             cmd.doc = right;
                         }
                     }
-                    Doc::QuickUnion(ref left, ref right) => {
+                    Doc::PartialUnion(ref left, ref right) => {
                         if mode == Mode::Flat || self.fitting(left, self.pos, indent, Mode::Break) {
                             cmd.doc = left;
                         } else {
@@ -253,7 +253,7 @@ where
                         };
                     }
 
-                    Doc::Union(ref inner, _) | Doc::QuickUnion(ref inner, _)
+                    Doc::Union(ref inner, _) | Doc::PartialUnion(ref inner, _)
                         if mode == Mode::Flat =>
                     {
                         // In flat mode we only consider the first branch.
@@ -263,7 +263,7 @@ where
                     Doc::Nest(_, ref inner)
                     | Doc::Group(ref inner)
                     | Doc::Union(_, ref inner)
-                    | Doc::QuickUnion(_, ref inner) => {
+                    | Doc::PartialUnion(_, ref inner) => {
                         doc = inner;
                     }
 
