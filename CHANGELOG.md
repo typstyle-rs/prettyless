@@ -1,5 +1,37 @@
 # Changelog
 
+## v0.2.0 (2025-07-07)
+
+We have made significant refactoring of the codebase to optimize readability, make naming more intuitive, and added new features.
+
+There are a large number of API changes, please check the code to understand the migration.
+
+### Added
+
+- `DocBuilder::when_group_flat` (equivalent to `nil.flat_alt(self)`) and `DocBuilder::when_group_break` (equivalent to `self.flat_alt(nil)`)
+- `DocAllocator::spaces` (create a document of n spaces)
+- `DocBuilder::repeat` (repeat self n times)
+- `Doc::PartialUnion` variant and `DocBuilder::partial_union` (like `union` but only tries fitting on the first line)
+- `Doc::Flatten` variant and `DocBuilder::flatten` (force the document to always render flat)
+- `Arena::len` and `Arena::is_empty`
+
+### Changed
+
+- Bump Rust edition to 2021
+- Upgrade `unicode-width` to 0.2
+- Rename some variants of `Doc` for clarity (breaking change)
+- Rename the printing function `Doc::pretty` → `Doc::print` to avoid ambiguity (breaking change)
+- Make `Debug` output for `Doc` more compact and fix matching of `SoftLine`
+
+### Removed
+
+- Removed `Affixes`
+- Drop `Doc:Annotated` and `termcolor` features (breaking change)
+
+## v0.1.0
+
+Forked project. No change other than renaming.
+
 ## Upstream History
 
 All original changelog entries from the upstream project.

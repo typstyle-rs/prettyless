@@ -1,6 +1,6 @@
 # prettyless
 
-[![build](https://github.com/typstyle-rs/prettyless/actions/workflows/build.yml/badge.svg)](https://github.com/typstyle-rs/prettyless/actions/workflows/build.yml)
+[![build](https://github.com/typstyle-rs/prettyless/actions/workflows/ci.yml/badge.svg)](https://github.com/typstyle-rs/prettyless/actions/workflows/ci.yml)
 [![Docs](https://docs.rs/prettyless/badge.svg)](https://docs.rs/prettyless)
 
 Pretty printing combinators for Rust

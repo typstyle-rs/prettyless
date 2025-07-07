@@ -1,10 +1,10 @@
 [package]
 name = "prettyless"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["QuadnucYard <quadnucyard@gmail.com>"]
 description = "Wadler-style pretty-printing combinators in Rust with more features."
 documentation = "https://docs.rs/prettyless/"
-keywords = ["console", "functional", "pretty-printing"]
+keywords = ["functional", "pretty-printing"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/typstyle-rs/prettyless"
