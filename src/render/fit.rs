@@ -15,11 +15,12 @@ where
             doc,
         }],
         fit_docs: vec![],
+        line_suffixes: vec![],
         width,
         #[cfg(feature = "contextual")]
         temp_arena: &typed_arena::Arena::new(),
     }
-    .print_to(0, out)?;
+    .print_to(out, PrintState::default())?;
 
     Ok(())
 }
@@ -54,19 +55,31 @@ where
     pos: usize,
     cmds: Vec<Cmd<'d, 'a, T>>,
     fit_docs: Vec<FitCmd<'d, 'a, T>>,
+    line_suffixes: Vec<&'d Doc<'a, T>>,
     width: usize,
     #[cfg(feature = "contextual")]
     temp_arena: &'d typed_arena::Arena<T>,
+}
+
+#[derive(Default, Clone, Copy)]
+struct PrintState {
+    cmd_top: usize,
+    line_suffix_top: usize,
 }
 
 impl<'d, 'a, T> Printer<'d, 'a, T>
 where
     T: DocPtr<'a> + 'a,
 {
-    fn print_to<W>(&mut self, top: usize, out: &mut W) -> Result<bool, W::Error>
+    fn print_to<W>(&mut self, out: &mut W, state: PrintState) -> Result<bool, W::Error>
     where
         W: ?Sized + Render,
     {
+        let PrintState {
+            cmd_top: top,
+            line_suffix_top: ls_top,
+        } = state;
+
         let mut fits = true;
         while self.cmds.len() > top {
             // Pop the next command
@@ -99,6 +112,13 @@ where
                     }
 
                     Doc::HardLine => {
+                        // flush line suffixes
+                        if self.line_suffixes.len() > ls_top {
+                            self.cmds.push(cmd);
+                            self.push_line_suffixes(ls_top, mode, indent);
+                            break;
+                        }
+
                         // The next document may have different indentation so we should use it if
                         // we can
                         if let Some(next) = self.cmds.pop() {
@@ -117,6 +137,10 @@ where
                         cmd.doc = visit_sequence2(left, right, |doc| {
                             self.cmds.push(Cmd { indent, mode, doc })
                         });
+                    }
+                    Doc::LineSuffix(ref inner) => {
+                        self.line_suffixes.push(inner);
+                        break;
                     }
 
                     Doc::Nest(offset, ref inner) => {
@@ -160,7 +184,10 @@ where
 
                         // Try the left branch in a buffer
                         let save_pos = self.pos;
-                        let save_cmds = self.cmds.len();
+                        let save_state = PrintState {
+                            cmd_top: self.cmds.len(),
+                            line_suffix_top: self.line_suffixes.len(),
+                        };
 
                         self.cmds.push(Cmd {
                             indent,
@@ -169,13 +196,14 @@ where
                         });
                         let mut buffer = BufferWrite::new();
 
-                        if let Ok(true) = self.print_to(save_cmds, &mut buffer) {
+                        if let Ok(true) = self.print_to(&mut buffer, save_state) {
                             buffer.render(out)?;
                             break;
                         } else {
                             // Revert and try right
                             self.pos = save_pos;
-                            self.cmds.truncate(save_cmds);
+                            self.cmds.truncate(save_state.cmd_top);
+                            self.line_suffixes.truncate(save_state.line_suffix_top);
                             cmd.doc = right;
                         }
                     }
@@ -197,9 +225,21 @@ where
                     }
                 }
             }
+
+            // handle line suffixes when all cleared
+            if self.cmds.len() == top && self.line_suffixes.len() > ls_top {
+                self.push_line_suffixes(ls_top, Mode::Break, 0);
+            }
         }
 
         Ok(fits)
+    }
+
+    fn push_line_suffixes(&mut self, ls_top: usize, mode: Mode, indent: usize) {
+        self.line_suffixes
+            .drain(ls_top..)
+            .rev()
+            .for_each(|doc| self.cmds.push(Cmd { indent, mode, doc }));
     }
 
     #[cfg_attr(not(feature = "contextual"), allow(unused_variables))]
@@ -254,6 +294,7 @@ where
                             self.fit_docs.push(FitCmd { mode, doc })
                         });
                     }
+                    Doc::LineSuffix(_) => break, // Line suffixes don't affect fitting, skip them entirely
 
                     Doc::ExpandParent => {
                         if mode == Mode::Flat {

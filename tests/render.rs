@@ -215,6 +215,31 @@ fn union2() {
 }
 
 #[test]
+fn line_suffix_with_union() {
+    let arena = Arena::new();
+
+    let doc = arena.text("a")
+        + arena.line_suffix(" // 1")
+        + arena.text("a")
+        + (arena.line_suffix(" // 3") + arena.text("6666666"))
+            .union(arena.line_suffix(" // 4") + arena.text("77"));
+
+    test!(5, doc, "aa77 // 1 // 4");
+}
+
+#[test]
+fn line_suffix_with_union2() {
+    let arena = Arena::new();
+
+    let doc = arena.line_suffix(" // 1")
+        + arena.text("a")
+        + (arena.line_suffix(" // 3") + arena.hardline() + arena.text("xxxxxxx"))
+            .union(arena.line_suffix(" // 4") + arena.text("yyy"));
+
+    test!(5, doc, "ayyy // 1 // 4");
+}
+
+#[test]
 fn usize_max_value() {
     let doc = BoxDoc::group(
         BoxDoc::text("test")

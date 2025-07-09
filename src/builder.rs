@@ -106,6 +106,27 @@ where
         Self(allocator, doc.into())
     }
 
+    /// Make `self` a line suffix.
+    ///
+    /// ```
+    /// use prettyless::{Arena, DocAllocator};
+    ///
+    /// let arena = Arena::new();
+    /// let doc = arena.text(" // comment").as_line_suffix() + arena.text("x");
+    ///
+    /// assert_eq!(doc.print(80).to_string(), "x // comment");
+    /// ```
+    #[inline]
+    pub fn as_line_suffix(self) -> Self {
+        match *self.1 {
+            Doc::Nil | Doc::LineSuffix(_) => self,
+            _ => {
+                let Self(allocator, this) = self;
+                Self(allocator, Doc::LineSuffix(allocator.alloc_cow(this)).into())
+            }
+        }
+    }
+
     /// Acts as `self` when laid out on multiple lines and acts as `that` when laid out on a single line.
     ///
     /// ```
