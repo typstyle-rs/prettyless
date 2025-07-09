@@ -35,7 +35,8 @@ where
     HardLine,
 
     // Structural
-    Append(T, T), // sequencing
+    Append(T, T),  // Sequencing
+    LineSuffix(T), // A document that is appended to the end of the current line.
 
     // Indentation and Alignment
     Nest(isize, T),  // Changes the indentation level
@@ -135,6 +136,8 @@ where
                 });
                 f.finish()
             }
+            Doc::LineSuffix(ref doc) => write_compact(f, doc, "LineSuffix"),
+
             Doc::Nest(off, ref doc) => {
                 write!(f, "Nest({off}, ",)?;
                 doc.fmt(f)?;

@@ -165,6 +165,37 @@ pub trait DocAllocator<'a> {
         }
     }
 
+    /// Pushes some content to the end of the current line.
+    ///
+    /// Multiple `line_suffix` calls accumulate in order and are all flushed together when a line
+    /// break occurs or rendering ends.
+    ///
+    /// ```
+    /// use prettyless::{Arena, DocAllocator};
+    ///
+    /// let arena = Arena::new();
+    ///
+    /// let doc = (arena.text("a")
+    ///     + arena.line_suffix(" // 1")
+    ///     + arena.line()
+    ///     + arena.line_suffix(" // 2")
+    ///     + arena.text("b"))
+    /// .group();
+    /// assert_eq!(doc.print(5).to_string(), "a b // 1 // 2");
+    ///
+    /// let doc = arena.text("a")
+    ///     + arena.line_suffix(" // 1")
+    ///     + arena.hardline()
+    ///     + arena.line_suffix(" // 2")
+    ///     + arena.text("b");
+    /// assert_eq!(doc.print(5).to_string(), "a // 1\nb // 2");
+    /// ```
+    #[inline]
+    fn line_suffix(&'a self, doc: impl Pretty<'a, Self>) -> DocBuilder<'a, Self> {
+        let doc = doc.pretty(self).into_doc();
+        DocBuilder(self, Doc::LineSuffix(doc).into())
+    }
+
     /// Allocate a document concatenating the given documents.
     #[inline]
     fn concat<I>(&'a self, docs: I) -> DocBuilder<'a, Self>
