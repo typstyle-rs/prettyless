@@ -123,15 +123,9 @@ where
                         cmd.doc = inner;
                     }
 
+                    Doc::ExpandParent => break,
                     Doc::Flatten(ref inner) => {
                         cmd.mode = Mode::Flat;
-                        cmd.doc = inner;
-                    }
-                    Doc::Group(ref inner) => {
-                        if mode == Mode::Break && self.fitting(inner, self.pos, indent, Mode::Flat)
-                        {
-                            cmd.mode = Mode::Flat;
-                        }
                         cmd.doc = inner;
                     }
                     Doc::BreakOrFlat(ref break_doc, ref flat_doc) => {
@@ -139,6 +133,13 @@ where
                             Mode::Break => break_doc,
                             Mode::Flat => flat_doc,
                         };
+                    }
+                    Doc::Group(ref inner) => {
+                        if mode == Mode::Break && self.fitting(inner, self.pos, indent, Mode::Flat)
+                        {
+                            cmd.mode = Mode::Flat;
+                        }
+                        cmd.doc = inner;
                     }
                     Doc::Union(ref left, ref right) => {
                         if mode == Mode::Flat {
@@ -240,6 +241,12 @@ where
                         });
                     }
 
+                    Doc::ExpandParent => {
+                        if mode == Mode::Flat {
+                            return false;
+                        }
+                        break;
+                    }
                     Doc::Flatten(ref inner) => {
                         mode = Mode::Flat;
                         doc = inner;
