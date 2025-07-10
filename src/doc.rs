@@ -39,9 +39,10 @@ where
     Nest(isize, T), // indenting
 
     // Choices
+    ExpandParent,       // make the parent group break
     Flatten(T),         // always flat inside
-    Group(T),           // try flat vs broken
     BreakOrFlat(T, T),  // break vs flat
+    Group(T),           // try flat vs broken
     Union(T, T),        // alternative layouts
     PartialUnion(T, T), // like union, but only fit on the first line
 
@@ -134,6 +135,8 @@ where
                 write!(f, ")")
             }
 
+            Doc::ExpandParent => f.write_str("ExpandParent"),
+            Doc::Flatten(ref doc) => write_compact(f, doc, "Flatten"),
             Doc::BreakOrFlat(ref x, ref y) => match (&**x, &**y) {
                 (Doc::HardLine, Doc::Text(Text::Borrowed(" "))) => f.write_str("LineOrSpace"),
                 (Doc::HardLine, Doc::Nil) => f.write_str("LineOrNil"),
@@ -141,7 +144,6 @@ where
                 (Doc::Nil, _) => f.debug_tuple("WhenFlat").field(y).finish(),
                 _ => f.debug_tuple("FlatOrBreak").field(y).field(x).finish(),
             },
-            Doc::Flatten(ref doc) => write_compact(f, doc, "Flatten"),
             Doc::Group(ref doc) => match &**doc {
                 Doc::BreakOrFlat(x, y)
                     if matches!(
@@ -370,6 +372,12 @@ macro_rules! impl_doc_methods {
             #[inline]
             pub fn space() -> Self {
                 Doc::Text(Text::Borrowed(" ")).into()
+            }
+
+            /// Make the parent group break
+            #[inline]
+            pub fn expand_parent() -> Self {
+                Doc::ExpandParent.into()
             }
         }
 

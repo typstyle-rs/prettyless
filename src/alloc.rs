@@ -105,6 +105,20 @@ pub trait DocAllocator<'a> {
         doc.pretty(self).flat_alt(self.nil())
     }
 
+    /// Make the parent group break
+    ///
+    /// ```
+    /// use prettyless::DocAllocator;
+    ///
+    /// let arena = prettyless::Arena::new();
+    /// let doc = (arena.line() + arena.expand_parent()).group();
+    /// assert_eq!(doc.print(80).to_string(), "\n");
+    /// ```
+    #[inline]
+    fn expand_parent(&'a self) -> DocBuilder<'a, Self> {
+        DocBuilder(self, Doc::ExpandParent.into())
+    }
+
     /// Allocate a document containing the text `t.to_string()`.
     ///
     /// The given text must not contain line breaks.
