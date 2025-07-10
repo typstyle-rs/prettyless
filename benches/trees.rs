@@ -41,7 +41,7 @@ macro_rules! bench_trees {
 
         let allocator = $allocator;
 
-        b.iter(|| example.pretty(&allocator).1.render(70, &mut out).unwrap());
+        b.iter(|| example.pretty(&allocator).render(70, &mut out).unwrap());
     }};
 }
 

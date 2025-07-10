@@ -102,6 +102,17 @@ where
     T: DocPtr<'a> + fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let write_compact = |f: &mut fmt::Formatter<'_>, doc: &T, name: &str| {
+            if matches!(**doc, Doc::Append(_, _)) {
+                f.write_str(name)?;
+                f.write_str("(")?;
+                doc.fmt(f)?;
+                f.write_str(")")
+            } else {
+                f.debug_tuple(name).field(doc).finish()
+            }
+        };
+
         match self {
             Doc::Nil => f.write_str("Nil"),
             Doc::Fail => f.write_str("Fail"),
@@ -130,15 +141,7 @@ where
                 (Doc::Nil, _) => f.debug_tuple("WhenFlat").field(y).finish(),
                 _ => f.debug_tuple("FlatOrBreak").field(y).field(x).finish(),
             },
-            Doc::Flatten(ref doc) => {
-                if matches!(**doc, Doc::Append(_, _)) {
-                    f.write_str("Flatten(")?;
-                    doc.fmt(f)?;
-                    f.write_str(")")
-                } else {
-                    f.debug_tuple("Flatten").field(doc).finish()
-                }
-            }
+            Doc::Flatten(ref doc) => write_compact(f, doc, "Flatten"),
             Doc::Group(ref doc) => match &**doc {
                 Doc::BreakOrFlat(x, y)
                     if matches!(
@@ -151,12 +154,7 @@ where
                 Doc::BreakOrFlat(x, y) if matches!((&**x, &**y), (Doc::HardLine, Doc::Nil)) => {
                     f.write_str("SoftLineOrNil")
                 }
-                Doc::Append(_, _) => {
-                    f.write_str("Group(")?;
-                    doc.fmt(f)?;
-                    f.write_str(")")
-                }
-                _ => f.debug_tuple("Group").field(doc).finish(),
+                _ => write_compact(f, doc, "Group"),
             },
             Doc::Union(ref l, ref r) => f.debug_tuple("Union").field(l).field(r).finish(),
             Doc::PartialUnion(ref l, ref r) => {
@@ -559,5 +557,32 @@ where
             Some(s) => s.into(),
             None => BuildDoc::Doc(Doc::Nil),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::*;
+
+    #[cfg(target_pointer_width = "64")]
+    #[test]
+    fn doc_size() {
+        // Safeguard against accidentally growing Doc
+        assert_eq!(8 * 3, std::mem::size_of::<Doc<RefDoc>>());
+    }
+
+    #[test]
+    fn debug_concat() {
+        let a = Arena::new();
+        let doc = (a.text("1") + a.text("2")) + a.text("3") + a.text("4");
+        assert_eq!(
+            format!("{doc:#?}"),
+            r#"[
+    "1",
+    "2",
+    "3",
+    "4",
+]"#
+        )
     }
 }

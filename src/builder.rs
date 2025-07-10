@@ -73,16 +73,16 @@ where
     /// let arena = Arena::new();
     /// let doc = arena.text("[]");
     ///
-    /// assert_eq!(doc.clone().repeat(0).1.print(100).to_string(), "");
+    /// assert_eq!(doc.clone().repeat(0).print(100).to_string(), "");
     /// assert_eq!(arena.len(), 0); // +0
     ///
-    /// assert_eq!(doc.clone().repeat(1).1.print(100).to_string(), "[]");
+    /// assert_eq!(doc.clone().repeat(1).print(100).to_string(), "[]");
     /// assert_eq!(arena.len(), 0); // +0
     ///
-    /// assert_eq!(doc.clone().repeat(2).1.print(100).to_string(), "[][]");
+    /// assert_eq!(doc.clone().repeat(2).print(100).to_string(), "[][]");
     /// assert_eq!(arena.len(), 1); // +1
     ///
-    /// assert_eq!(doc.clone().repeat(5).1.print(100).to_string(), "[][][][][]");
+    /// assert_eq!(doc.clone().repeat(5).print(100).to_string(), "[][][][][]");
     /// assert_eq!(arena.len(), 5); // +4
     /// ```
     pub fn repeat(self, n: usize) -> Self
@@ -128,8 +128,8 @@ where
     ///     )
     ///     .group();
     ///
-    /// assert_eq!(doc.1.print(100).to_string(), "let x in x");
-    /// assert_eq!(doc.1.print(8).to_string(), "let x\nx");
+    /// assert_eq!(doc.print(100).to_string(), "let x in x");
+    /// assert_eq!(doc.print(8).to_string(), "let x\nx");
     /// ```
     #[inline]
     pub fn flat_alt<E>(self, that: E) -> Self
@@ -151,8 +151,8 @@ where
     /// let arena = Arena::new();
     /// let doc = arena.text("flat-only").when_group_flat().group();
     ///
-    /// assert_eq!(doc.1.print(0).to_string(), "");
-    /// assert_eq!(doc.1.print(10).to_string(), "flat-only");
+    /// assert_eq!(doc.print(0).to_string(), "");
+    /// assert_eq!(doc.print(10).to_string(), "flat-only");
     /// ```
     #[inline]
     pub fn when_group_flat(self) -> Self {
@@ -171,8 +171,8 @@ where
     ///     .parens()
     ///     .group();
     ///
-    /// assert_eq!(doc.1.print(1).to_string(), "(\na,\n)");
-    /// assert_eq!(doc.1.print(10).to_string(), "(a)");
+    /// assert_eq!(doc.print(1).to_string(), "(\na,\n)");
+    /// assert_eq!(doc.print(10).to_string(), "(a)");
     /// ```
     #[inline]
     pub fn when_group_break(self) -> Self {
@@ -283,7 +283,7 @@ where
     ///     arena.hardline(),
     ///     "next",
     /// ];
-    /// assert_eq!(doc.1.print(80).to_string(), "lorem ipsum\n      dolor\nnext");
+    /// assert_eq!(doc.print(80).to_string(), "lorem ipsum\n      dolor\nnext");
     /// ```
     #[inline]
     pub fn align(self) -> Self
@@ -311,7 +311,7 @@ where
     /// let doc = arena.text("prefix").append(arena.text(" "))
     ///     .append(arena.reflow("Indenting these words with nest").hang(4));
     /// assert_eq!(
-    ///     doc.1.print(24).to_string(),
+    ///     doc.print(24).to_string(),
     ///     "prefix Indenting these\n           words with\n           nest",
     /// );
     /// ```
@@ -335,7 +335,7 @@ where
     /// let doc = arena.text("prefix").append(arena.text(" "))
     ///     .append(arena.reflow("The indent function indents these words!").indent(4));
     /// assert_eq!(
-    ///     doc.1.print(24).to_string(),
+    ///     doc.print(24).to_string(),
     /// "
     /// prefix     The indent
     ///            function
