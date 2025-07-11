@@ -35,8 +35,12 @@ where
     HardLine,
 
     // Structural
-    Append(T, T),   // sequencing
-    Nest(isize, T), // indenting
+    Append(T, T), // sequencing
+
+    // Indentation and Alignment
+    Nest(isize, T),  // Changes the indentation level
+    DedentToRoot(T), // Dedent to the root level, which is always 0
+    Align(T),        // Align to the current position
 
     // Choices
     ExpandParent,       // make the parent group break
@@ -134,6 +138,8 @@ where
                 doc.fmt(f)?;
                 write!(f, ")")
             }
+            Doc::DedentToRoot(ref doc) => write_compact(f, doc, "DedentToRoot"),
+            Doc::Align(ref doc) => write_compact(f, doc, "Align"),
 
             Doc::ExpandParent => f.write_str("ExpandParent"),
             Doc::Flatten(ref doc) => write_compact(f, doc, "Flatten"),
