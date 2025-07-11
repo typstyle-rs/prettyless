@@ -1,5 +1,4 @@
 use std::{
-    convert::TryInto,
     fmt,
     ops::{Add, AddAssign, Deref},
 };
@@ -213,10 +212,10 @@ where
     /// Increase the indentation level of this document.
     #[inline]
     pub fn nest(self, offset: isize) -> Self {
-        if let Doc::Nil = &*self.1 {
+        if offset == 0 {
             return self;
         }
-        if offset == 0 {
+        if let Doc::Nil = &*self.1 {
             return self;
         }
         let Self(allocator, this) = self;
@@ -224,6 +223,83 @@ where
             allocator,
             Doc::Nest(offset, allocator.alloc_cow(this)).into(),
         )
+    }
+
+    /// Increases the indentation level of this document by the given number of spaces.
+    ///
+    /// This is equivalent to calling `nest(offset as isize)`.
+    #[inline]
+    pub fn indent(self, offset: usize) -> Self {
+        self.nest(offset as isize)
+    }
+
+    /// Decreases the indentation level of this document by the given number of spaces.
+    ///
+    /// This is equivalent to calling `nest(-(offset as isize))`.
+    #[inline]
+    pub fn dedent(self, offset: usize) -> Self {
+        self.nest(-(offset as isize))
+    }
+
+    /// Dedents to the root level, which is always 0.
+    ///
+    /// ```
+    /// use prettyless::{Arena, DocAllocator};
+    ///
+    /// let arena = Arena::new();
+    /// let doc = (
+    ///     arena.text("a")
+    ///     + (arena.text("b") + arena.hardline() + arena.text("c")).dedent_to_root()
+    ///     + arena.hardline()
+    ///     + arena.text("e")
+    /// ).indent(4);
+    /// assert_eq!(doc.print(10).to_string(), "ab\nc\n    e");
+    /// ```
+    #[inline]
+    pub fn dedent_to_root(self) -> Self {
+        match *self.1 {
+            Doc::Nil | Doc::DedentToRoot(_) => self,
+            _ => {
+                let Self(allocator, this) = self;
+                Self(
+                    allocator,
+                    Doc::DedentToRoot(allocator.alloc_cow(this)).into(),
+                )
+            }
+        }
+    }
+
+    /// Lays out `self` so with the nesting level set to the current column
+    ///
+    /// ```rust
+    /// use prettyless::{docs, DocAllocator};
+    ///
+    /// let arena = &prettyless::Arena::new();
+    /// let doc = docs![
+    ///     arena,
+    ///     "lorem",
+    ///     " ",
+    ///     arena.intersperse(["ipsum", "dolor"].iter().cloned(), arena.line_()).align(),
+    ///     arena.hardline(),
+    ///     "next",
+    /// ];
+    /// assert_eq!(
+    ///     doc.print(80).to_string(),
+    /// "
+    /// lorem ipsum
+    ///       dolor
+    /// next".trim_start()
+    /// );
+    /// ```
+    #[inline]
+    pub fn align(self) -> Self {
+        match *self.1 {
+            Doc::Nil | Doc::Align(_) => self,
+            _ => {
+                let Self(allocator, this) = self;
+                Self(allocator, Doc::Align(allocator.alloc_cow(this)).into())
+            }
+        }
     }
 
     /// ```
@@ -264,103 +340,6 @@ where
         let other = other.into();
         let doc = Doc::PartialUnion(allocator.alloc_cow(this), allocator.alloc_cow(other));
         Self(allocator, doc.into())
-    }
-
-    /// Lays out `self` so with the nesting level set to the current column
-    ///
-    /// NOTE: The doc pointer type, `D` may need to be cloned. Consider using cheaply cloneable ptr
-    /// like `RefDoc` or `RcDoc`
-    ///
-    /// ```rust
-    /// use prettyless::{docs, DocAllocator};
-    ///
-    /// let arena = &prettyless::Arena::new();
-    /// let doc = docs![
-    ///     arena,
-    ///     "lorem",
-    ///     " ",
-    ///     arena.intersperse(["ipsum", "dolor"].iter().cloned(), arena.line_()).align(),
-    ///     arena.hardline(),
-    ///     "next",
-    /// ];
-    /// assert_eq!(doc.print(80).to_string(), "lorem ipsum\n      dolor\nnext");
-    /// ```
-    #[inline]
-    pub fn align(self) -> Self
-    where
-        Self: Clone,
-    {
-        let allocator = self.0;
-        allocator.on_column(move |col| {
-            let self_ = self.clone();
-            allocator
-                .on_nesting(move |nest| self_.clone().nest(col as isize - nest as isize).into_doc())
-                .into_doc()
-        })
-    }
-
-    /// Lays out `self` with a nesting level set to the current level plus `adjust`.
-    ///
-    /// NOTE: The doc pointer type, `D` may need to be cloned. Consider using cheaply cloneable ptr
-    /// like `RefDoc` or `RcDoc`
-    ///
-    /// ```rust
-    /// use prettyless::DocAllocator;
-    ///
-    /// let arena = prettyless::Arena::new();
-    /// let doc = arena.text("prefix").append(arena.text(" "))
-    ///     .append(arena.reflow("Indenting these words with nest").hang(4));
-    /// assert_eq!(
-    ///     doc.print(24).to_string(),
-    ///     "prefix Indenting these\n           words with\n           nest",
-    /// );
-    /// ```
-    #[inline]
-    pub fn hang(self, adjust: isize) -> Self
-    where
-        Self: Clone,
-    {
-        self.nest(adjust).align()
-    }
-
-    /// Indents `self` by `adjust` spaces from the current cursor position
-    ///
-    /// NOTE: The doc pointer type, `D` may need to be cloned. Consider using cheaply cloneable ptr
-    /// like `RefDoc` or `RcDoc`
-    ///
-    /// ```rust
-    /// use prettyless::DocAllocator;
-    ///
-    /// let arena = prettyless::Arena::new();
-    /// let doc = arena.text("prefix").append(arena.text(" "))
-    ///     .append(arena.reflow("The indent function indents these words!").indent(4));
-    /// assert_eq!(
-    ///     doc.print(24).to_string(),
-    /// "
-    /// prefix     The indent
-    ///            function
-    ///            indents these
-    ///            words!".trim_start(),
-    /// );
-    /// ```
-    #[inline]
-    pub fn indent(self, adjust: usize) -> Self
-    where
-        Self: Clone,
-    {
-        let spaces = {
-            use crate::text::SPACES;
-            let Self(allocator, _) = self;
-            let mut doc = allocator.nil();
-            let mut remaining = adjust;
-            while remaining != 0 {
-                let i = SPACES.len().min(remaining);
-                remaining -= i;
-                doc = doc.append(allocator.text(&SPACES[..i]))
-            }
-            doc
-        };
-        spaces.append(self).hang(adjust.try_into().unwrap())
     }
 
     /// Lays out `self` and provides the column width of it available to `f`

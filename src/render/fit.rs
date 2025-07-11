@@ -122,6 +122,16 @@ where
                         cmd.indent = indent.saturating_add_signed(offset);
                         cmd.doc = inner;
                     }
+                    Doc::DedentToRoot(ref inner) => {
+                        // Dedent to the root level, which is always 0.
+                        cmd.indent = 0;
+                        cmd.doc = inner;
+                    }
+                    Doc::Align(ref inner) => {
+                        // Align to the current position.
+                        cmd.indent = self.pos;
+                        cmd.doc = inner;
+                    }
 
                     Doc::ExpandParent => break,
                     Doc::Flatten(ref inner) => {
@@ -268,6 +278,8 @@ where
                     }
 
                     Doc::Nest(_, ref inner)
+                    | Doc::DedentToRoot(ref inner)
+                    | Doc::Align(ref inner)
                     | Doc::Group(ref inner)
                     | Doc::Union(_, ref inner)
                     | Doc::PartialUnion(_, ref inner) => {
