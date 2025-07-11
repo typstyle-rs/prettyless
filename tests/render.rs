@@ -1,28 +1,8 @@
+mod macros;
+
 use std::borrow::Cow;
 
 use prettyless::*;
-
-macro_rules! chain {
-    ($first: expr $(, $rest: expr)* $(,)?) => {{
-        #[allow(unused_mut)]
-        let mut doc = DocBuilder(&BoxAllocator, $first.into());
-        $(
-            doc = doc.append($rest);
-        )*
-        doc.into_doc()
-    }}
-}
-
-macro_rules! test {
-    ($size:expr, $actual:expr, $expected:expr) => {
-        let mut s = String::new();
-        $actual.render_fmt($size, &mut s).unwrap();
-        difference::assert_diff!(&s, $expected, "\n", 0);
-    };
-    ($actual:expr, $expected:expr) => {
-        test!(70, $actual, $expected)
-    };
-}
 
 #[test]
 fn box_doc_inference() {
@@ -162,86 +142,6 @@ fn line_comment() {
     );
 
     test!(14, doc, "{\n  test\n  // a\n  test\n}");
-}
-
-fn nest_on_line(doc: BoxDoc<'static>) -> BoxDoc<'static> {
-    BoxDoc::softline().append(BoxDoc::nesting(move |n| {
-        let doc = doc.clone();
-        BoxDoc::column(move |c| {
-            if n == c {
-                BoxDoc::text("  ").append(doc.clone()).nest(2)
-            } else {
-                doc.clone()
-            }
-        })
-    }))
-}
-
-#[test]
-fn hang_lambda1() {
-    let doc = chain![
-        chain!["let", BoxDoc::line(), "x", BoxDoc::line(), "="].group(),
-        nest_on_line(chain![
-            "\\y ->",
-            chain![BoxDoc::line(), "y"].nest(2).group()
-        ]),
-    ]
-    .group();
-
-    test!(doc, "let x = \\y -> y");
-    test!(
-        8,
-        doc,
-        r"let x =
-  \y ->
-    y"
-    );
-    test!(
-        14,
-        doc,
-        r"let x = \y ->
-  y"
-    );
-}
-
-#[test]
-fn hang_comment() {
-    let body = chain!["y"].nest(2).group();
-    let doc = chain![
-        chain!["let", BoxDoc::line(), "x", BoxDoc::line(), "="].group(),
-        nest_on_line(chain![
-            "\\y ->",
-            nest_on_line(chain!["// abc", BoxDoc::hardline(), body])
-        ]),
-    ]
-    .group();
-
-    test!(8, doc, "let x =\n  \\y ->\n    // abc\n    y");
-    test!(14, doc, "let x = \\y ->\n  // abc\n  y");
-}
-
-#[test]
-fn union() {
-    let doc = chain![
-        chain!["let", BoxDoc::line(), "x", BoxDoc::line(), "="].group(),
-        nest_on_line(chain![
-            "(",
-            chain![
-                BoxDoc::line_(),
-                chain!["x", ","].group(),
-                BoxDoc::line(),
-                chain!["1234567890", ","].group()
-            ]
-            .nest(2)
-            .group(),
-            BoxDoc::line_().append(")"),
-        ])
-    ]
-    .group();
-
-    test!(doc, "let x = (x, 1234567890,)");
-    test!(8, doc, "let x =\n  (\n    x,\n    1234567890,\n  )");
-    test!(14, doc, "let x = (\n  x,\n  1234567890,\n)");
 }
 
 fn hang2(
