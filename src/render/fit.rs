@@ -7,7 +7,6 @@ where
     T: DocPtr<'a> + 'a,
     W: ?Sized + Render,
 {
-    let temp_arena = &typed_arena::Arena::new();
     Printer {
         pos: 0,
         cmds: vec![Cmd {
@@ -17,7 +16,8 @@ where
         }],
         fit_docs: vec![],
         width,
-        temp_arena,
+        #[cfg(feature = "contextual")]
+        temp_arena: &typed_arena::Arena::new(),
     }
     .print_to(0, out)?;
 
@@ -55,6 +55,7 @@ where
     cmds: Vec<Cmd<'d, 'a, T>>,
     fit_docs: Vec<FitCmd<'d, 'a, T>>,
     width: usize,
+    #[cfg(feature = "contextual")]
     temp_arena: &'d typed_arena::Arena<T>,
 }
 
@@ -186,9 +187,11 @@ where
                         }
                     }
 
+                    #[cfg(feature = "contextual")]
                     Doc::OnColumn(ref f) => {
                         cmd.doc = self.temp_arena.alloc(f(self.pos));
                     }
+                    #[cfg(feature = "contextual")]
                     Doc::OnNesting(ref f) => {
                         cmd.doc = self.temp_arena.alloc(f(indent));
                     }
@@ -199,6 +202,7 @@ where
         Ok(fits)
     }
 
+    #[cfg_attr(not(feature = "contextual"), allow(unused_variables))]
     fn fitting(&mut self, next: &'d Doc<'a, T>, mut pos: usize, indent: usize, mode: Mode) -> bool {
         // We start in "flat" mode and may fall back to "break" mode when backtracking.
         let mut cmd_bottom = self.cmds.len();
@@ -286,10 +290,11 @@ where
                         doc = inner;
                     }
 
+                    #[cfg(feature = "contextual")]
                     Doc::OnColumn(ref f) => {
                         doc = self.temp_arena.alloc(f(pos));
                     }
-
+                    #[cfg(feature = "contextual")]
                     Doc::OnNesting(ref f) => {
                         doc = self.temp_arena.alloc(f(indent));
                     }

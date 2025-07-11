@@ -8,11 +8,13 @@ pub trait DocAllocator<'a> {
 
     fn alloc(&'a self, doc: Doc<'a, Self::Doc>) -> Self::Doc;
 
+    #[cfg(feature = "contextual")]
     fn alloc_column_fn(
         &'a self,
         f: impl Fn(usize) -> Self::Doc + 'a,
     ) -> <Self::Doc as DocPtr<'a>>::ColumnFn;
 
+    #[cfg(feature = "contextual")]
     fn alloc_width_fn(
         &'a self,
         f: impl Fn(isize) -> Self::Doc + 'a,
@@ -224,6 +226,7 @@ pub trait DocAllocator<'a> {
     ///     }));
     /// assert_eq!(doc.print(80).to_string(), "prefix | <- column 7");
     /// ```
+    #[cfg(feature = "contextual")]
     #[inline]
     fn on_column(&'a self, f: impl Fn(usize) -> Self::Doc + 'a) -> DocBuilder<'a, Self> {
         DocBuilder(self, Doc::OnColumn(self.alloc_column_fn(f)).into())
@@ -241,6 +244,7 @@ pub trait DocAllocator<'a> {
     ///     }).nest(4));
     /// assert_eq!(doc.print(80).to_string(), "prefix [Nested: 4]");
     /// ```
+    #[cfg(feature = "contextual")]
     #[inline]
     fn on_nesting(&'a self, f: impl Fn(usize) -> Self::Doc + 'a) -> DocBuilder<'a, Self> {
         DocBuilder(self, Doc::OnNesting(self.alloc_column_fn(f)).into())
@@ -283,6 +287,7 @@ impl<'a> Arena<'a> {
         self.len() == 0
     }
 
+    #[cfg(feature = "contextual")]
     fn alloc_any<T>(&'a self, f: T) -> &'a T
     where
         T: 'a,
@@ -316,6 +321,7 @@ where
         (**self).alloc(doc)
     }
 
+    #[cfg(feature = "contextual")]
     fn alloc_column_fn(
         &'a self,
         f: impl Fn(usize) -> Self::Doc + 'a,
@@ -323,6 +329,7 @@ where
         (**self).alloc_column_fn(f)
     }
 
+    #[cfg(feature = "contextual")]
     fn alloc_width_fn(
         &'a self,
         f: impl Fn(isize) -> Self::Doc + 'a,
@@ -371,6 +378,7 @@ impl<'a> DocAllocator<'a> for Arena<'a> {
         })
     }
 
+    #[cfg(feature = "contextual")]
     fn alloc_column_fn(
         &'a self,
         f: impl Fn(usize) -> Self::Doc + 'a,
@@ -378,6 +386,7 @@ impl<'a> DocAllocator<'a> for Arena<'a> {
         self.alloc_any(f)
     }
 
+    #[cfg(feature = "contextual")]
     fn alloc_width_fn(
         &'a self,
         f: impl Fn(isize) -> Self::Doc + 'a,

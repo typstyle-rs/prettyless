@@ -346,6 +346,7 @@ where
     ///
     /// NOTE: The doc pointer type, `D` may need to be cloned. Consider using cheaply cloneable ptr
     /// like `RefDoc` or `RcDoc`
+    #[cfg(feature = "contextual")]
     #[inline]
     pub fn measure_width(self, f: impl Fn(isize) -> D::Doc + 'a) -> Self
     where

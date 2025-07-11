@@ -51,7 +51,9 @@ where
     PartialUnion(T, T), // like union, but only fit on the first line
 
     // Contextual
+    #[cfg(feature = "contextual")]
     OnColumn(T::ColumnFn),
+    #[cfg(feature = "contextual")]
     OnNesting(T::ColumnFn),
 }
 
@@ -169,7 +171,9 @@ where
                 f.debug_tuple("PartialUnion").field(l).field(r).finish()
             }
 
+            #[cfg(feature = "contextual")]
             Doc::OnColumn(_) => f.write_str("OnColumn(..)"),
+            #[cfg(feature = "contextual")]
             Doc::OnNesting(_) => f.write_str("OnNesting(..)"),
         }
     }
@@ -216,12 +220,16 @@ macro_rules! impl_doc {
             fn alloc(&'a self, doc: Doc<'a, Self::Doc>) -> Self::Doc {
                 $name::new(doc)
             }
+
+            #[cfg(feature = "contextual")]
             fn alloc_column_fn(
                 &'a self,
                 f: impl Fn(usize) -> Self::Doc + 'a,
             ) -> <Self::Doc as DocPtr<'a>>::ColumnFn {
                 Rc::new(f)
             }
+
+            #[cfg(feature = "contextual")]
             fn alloc_width_fn(
                 &'a self,
                 f: impl Fn(isize) -> Self::Doc + 'a,
@@ -340,11 +348,13 @@ macro_rules! impl_doc {
                 DocBuilder(&$allocator, self.into()).union(other).into_doc()
             }
 
+            #[cfg(feature = "contextual")]
             #[inline]
             pub fn column(f: impl Fn(usize) -> Self + 'static) -> Self {
                 DocBuilder(&$allocator, Doc::OnColumn($allocator.alloc_column_fn(f)).into()).into_doc()
             }
 
+            #[cfg(feature = "contextual")]
             #[inline]
             pub fn nesting(f: impl Fn(usize) -> Self + 'static) -> Self {
                 DocBuilder(&$allocator, Doc::OnNesting($allocator.alloc_column_fn(f)).into()).into_doc()
