@@ -49,7 +49,7 @@ pub trait DocAllocator<'a> {
 
     #[inline]
     fn space(&'a self) -> DocBuilder<'a, Self> {
-        self.text(" ")
+        self.ascii_text(" ")
     }
 
     /// A line acts like a `\n` but behaves like `space` if it is grouped on a single line.
@@ -126,7 +126,7 @@ pub trait DocAllocator<'a> {
     /// The given text must not contain line breaks.
     #[inline]
     fn as_string<U: fmt::Display>(&'a self, data: U) -> DocBuilder<'a, Self> {
-        DocBuilder::from_utf8_text(self, data.into())
+        DocBuilder::from_utf8_text(self, Text::from_display(data))
     }
 
     /// Allocate a document containing the given text.
@@ -136,13 +136,18 @@ pub trait DocAllocator<'a> {
     fn text<U: Into<Cow<'a, str>>>(&'a self, data: U) -> DocBuilder<'a, Self> {
         let data: Cow<_> = data.into();
         if data.is_empty() {
-            return DocBuilder(self, Doc::Nil.into());
+            return self.nil();
         }
-        let doc = match data {
-            Cow::Owned(t) => Text::Owned(t.into()),
-            Cow::Borrowed(t) => Text::Borrowed(t),
-        };
-        DocBuilder::from_utf8_text(self, doc)
+        DocBuilder::from_utf8_text(self, data.into())
+    }
+
+    /// Allocate a document containing the given text, which is assumed to be ASCII.
+    ///
+    /// This can avoid checking for unicode width.
+    fn ascii_text<U: Into<Cow<'a, str>>>(&'a self, data: U) -> DocBuilder<'a, Self> {
+        let data: Cow<_> = data.into();
+        debug_assert!(data.is_ascii(), "Input to `ascii_text` should be ASCII");
+        DocBuilder(self, Doc::Text(data.into()).into())
     }
 
     /// Allocate a document containing n spaces.
@@ -152,14 +157,14 @@ pub trait DocAllocator<'a> {
         if n == 0 {
             self.nil()
         } else if n <= SPACES.len() {
-            self.text(&SPACES[..n])
+            self.ascii_text(&SPACES[..n])
         } else {
             let mut doc = self.nil();
             let mut remaining = n;
             while remaining != 0 {
                 let i = SPACES.len().min(remaining);
                 remaining -= i;
-                doc = doc.append(self.text(&SPACES[..i]))
+                doc = doc.append(self.ascii_text(&SPACES[..i]))
             }
             doc
         }
@@ -434,5 +439,58 @@ impl<'a> DocAllocator<'a> for Arena<'a> {
         f: impl Fn(isize) -> Self::Doc + 'a,
     ) -> <Self::Doc as DocPtr<'a>>::WidthFn {
         self.alloc_any(f)
+    }
+
+    #[inline]
+    fn space(&'a self) -> DocBuilder<'a, Self> {
+        DocBuilder(self, RefDoc(&Doc::Text(Text::Borrowed(" "))).into())
+    }
+
+    /// Optimized text allocation for common ASCII characters.
+    #[inline]
+    fn text<U: Into<Cow<'a, str>>>(&'a self, data: U) -> DocBuilder<'a, Self> {
+        macro_rules! match_const_str {
+            ($text: expr ; $($s:literal),* $(,)? else => $default: expr) => {
+                match $text {
+                    $( $s => &Doc::Text(Text::Borrowed($s)), )*
+                    _ => $default,
+                }
+            };
+        }
+
+        let data: Cow<_> = data.into();
+        if data.is_empty() {
+            return self.nil();
+        }
+
+        match data {
+            Cow::Owned(t) => DocBuilder::from_utf8_text(self, Text::Owned(t.into())),
+            Cow::Borrowed(t) => {
+                let doc = match_const_str! {t;
+                    " ", ",", "(", ")", "[", "]", "{", "}", "<", ">", "#", ";", ":", "=", "+",
+                    "-", "*", "/", "&", "^", "_", "'", "\"", "`", "@", "!", "|", "\\", "?", "~",
+                    else => return DocBuilder::from_utf8_text(self, Cow::from(t).into())
+                };
+                DocBuilder(self, RefDoc(doc).into())
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::docs;
+
+    use super::*;
+
+    #[test]
+    fn arena_text() {
+        let arena = Arena::new();
+        let _doc = docs![&arena, " ", ":", "word", ","];
+        assert_eq!(arena.len(), 3); // 2x concat + 1x text "word"
+
+        let arena = Arena::new();
+        let _doc = docs![&arena, "there", "are", "some", "words"];
+        assert_eq!(arena.len(), 6); // 2x concat + 4x text
     }
 }
