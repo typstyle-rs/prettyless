@@ -286,12 +286,15 @@ pub struct BoxAllocator;
 
 pub struct RcAllocator;
 
+#[cfg(feature = "contextual")]
 trait DropT {}
+#[cfg(feature = "contextual")]
 impl<T> DropT for T {}
 
 /// An arena which can be used to allocate `Doc` values.
 pub struct Arena<'a> {
     docs: typed_arena::Arena<Doc<'a, RefDoc<'a>>>,
+    #[cfg(feature = "contextual")]
     column_fns: typed_arena::Arena<Box<dyn DropT>>,
 }
 
@@ -305,12 +308,20 @@ impl<'a> Arena<'a> {
     pub fn new() -> Self {
         Self {
             docs: typed_arena::Arena::new(),
+            #[cfg(feature = "contextual")]
             column_fns: Default::default(),
         }
     }
 
     pub fn len(&self) -> usize {
-        self.docs.len() + self.column_fns.len()
+        #[cfg(not(feature = "contextual"))]
+        {
+            self.docs.len()
+        }
+        #[cfg(feature = "contextual")]
+        {
+            self.docs.len() + self.column_fns.len()
+        }
     }
 
     #[must_use]

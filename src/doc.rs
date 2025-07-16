@@ -6,7 +6,9 @@ use crate::{
 };
 
 pub trait DocPtr<'a>: Deref<Target = Doc<'a, Self>> + Sized {
+    #[cfg(feature = "contextual")]
     type ColumnFn: Deref<Target = dyn Fn(usize) -> Self + 'a> + Clone + 'a;
+    #[cfg(feature = "contextual")]
     type WidthFn: Deref<Target = dyn Fn(isize) -> Self + 'a> + Clone + 'a;
 }
 
@@ -242,7 +244,9 @@ macro_rules! impl_doc {
         }
 
         impl<'a> DocPtr<'a> for $name<'a> {
+            #[cfg(feature = "contextual")]
             type ColumnFn = std::rc::Rc<dyn Fn(usize) -> Self + 'a>;
+            #[cfg(feature = "contextual")]
             type WidthFn = std::rc::Rc<dyn Fn(isize) -> Self + 'a>;
         }
 
@@ -428,7 +432,9 @@ impl_doc_methods!(BuildDoc ('a, D) where (D: DocPtr<'a>) where (D: StaticDoc<'a>
 pub struct RefDoc<'a>(pub &'a Doc<'a, RefDoc<'a>>);
 
 impl<'a> DocPtr<'a> for RefDoc<'a> {
+    #[cfg(feature = "contextual")]
     type ColumnFn = &'a (dyn Fn(usize) -> Self + 'a);
+    #[cfg(feature = "contextual")]
     type WidthFn = &'a (dyn Fn(isize) -> Self + 'a);
 }
 
