@@ -94,7 +94,7 @@ where
 
         let Self(allocator, this) = self;
         if n == 0 {
-            return Self(allocator, Doc::Nil.into());
+            return allocator.nil();
         }
 
         let this = allocator.alloc_cow(this);

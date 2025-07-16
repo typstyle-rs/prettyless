@@ -1,4 +1,4 @@
-use std::{fmt, ops::Deref};
+use std::{borrow::Cow, fmt, ops::Deref};
 
 type SmallText = arrayvec::ArrayString<[u8; 22]>;
 
@@ -10,6 +10,16 @@ pub enum Text<'a> {
 }
 
 impl Text<'_> {
+    pub fn from_display(value: impl fmt::Display) -> Self {
+        use std::fmt::Write;
+        let mut buf = FmtText::Small(SmallText::new());
+        write!(buf, "{value}").unwrap();
+        match buf {
+            FmtText::Small(b) => Text::Small(b),
+            FmtText::Large(b) => Text::Owned(b.into()),
+        }
+    }
+
     pub fn as_str(&self) -> &str {
         match self {
             Text::Owned(s) => s,
@@ -37,17 +47,11 @@ impl Deref for Text<'_> {
     }
 }
 
-impl<T> From<T> for Text<'_>
-where
-    T: fmt::Display,
-{
-    fn from(value: T) -> Self {
-        use std::fmt::Write;
-        let mut buf = FmtText::Small(SmallText::new());
-        write!(buf, "{value}").unwrap();
-        match buf {
-            FmtText::Small(b) => Text::Small(b),
-            FmtText::Large(b) => Text::Owned(b.into()),
+impl<'a> From<Cow<'a, str>> for Text<'a> {
+    fn from(value: Cow<'a, str>) -> Self {
+        match value {
+            Cow::Owned(t) => Self::Owned(t.into()),
+            Cow::Borrowed(t) => Self::Borrowed(t),
         }
     }
 }
