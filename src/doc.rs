@@ -62,6 +62,16 @@ where
 
 impl<'a, T> Doc<'a, T>
 where
+    T: DocPtr<'a>,
+{
+    #[inline]
+    pub fn is_nil(&self) -> bool {
+        matches!(self, Self::Nil)
+    }
+}
+
+impl<'a, T> Doc<'a, T>
+where
     T: StaticDoc<'a>,
 {
     /// The text `t.to_string()`.
@@ -617,5 +627,14 @@ mod tests {
     "4",
 ]"#
         )
+    }
+
+    #[test]
+    fn doc_is_nil() {
+        let arena = Arena::new();
+        assert!(arena.nil().is_nil());
+        assert!((arena.nil() + arena.nil()).is_nil());
+        assert!(arena.text("").is_nil());
+        assert!(!arena.text(" ").is_nil());
     }
 }
