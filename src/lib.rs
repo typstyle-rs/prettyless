@@ -263,6 +263,28 @@ where
     }
 }
 
+impl<'a, D, T, const N: usize> Pretty<'a, D> for [T; N]
+where
+    D: ?Sized + DocAllocator<'a>,
+    T: Pretty<'a, D>,
+{
+    /// Concat items of self with arena.
+    ///
+    /// ```
+    /// use prettyless::{Arena, DocAllocator, Pretty};
+    /// let arena = Arena::new();
+    ///
+    /// let doc = arena.text("#") + ["1", "2", "3", "4"];
+    /// assert_eq!(doc.print(80).to_string(), "#1234");
+    ///
+    /// let doc = ["a", "b", "c"].pretty(&arena);
+    /// assert_eq!(doc.print(80).to_string(), "abc");
+    /// ```
+    fn pretty(self, allocator: &'a D) -> DocBuilder<'a, D> {
+        allocator.concat(self)
+    }
+}
+
 /// Concatenates a number of documents (or values that can be converted into a document via the
 /// `Pretty` trait, like `&str`)
 ///

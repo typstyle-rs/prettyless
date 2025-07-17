@@ -35,6 +35,13 @@ where
         }
     }
 
+    pub fn into_ref(self) -> Self {
+        match self.1 {
+            BuildDoc::DocPtr(_) => self,
+            BuildDoc::Doc(d) => Self(self.0, BuildDoc::DocPtr(self.0.alloc(d))),
+        }
+    }
+
     pub(crate) fn into_plain_doc(self) -> Doc<'a, D::Doc> {
         match self.1 {
             BuildDoc::DocPtr(_) => unreachable!(),
