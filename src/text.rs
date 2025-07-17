@@ -1,30 +1,46 @@
 use std::{borrow::Cow, fmt, ops::Deref};
 
+#[cfg(feature = "small-text")]
 type SmallText = arrayvec::ArrayString<[u8; 22]>;
 
 #[derive(Clone)]
 pub enum Text<'a> {
     Owned(Box<str>),
     Borrowed(&'a str),
+    #[cfg(feature = "small-text")]
     Small(SmallText),
 }
 
 impl Text<'_> {
-    pub fn from_display(value: impl fmt::Display) -> Self {
+    /// Create a text from [`std::fmt::Display`] string.
+    /// It may use `SmallText` with `small-text` feature enabled.
+    pub fn from_display(value: impl fmt::Display) -> Result<Self, fmt::Error> {
         use std::fmt::Write;
-        let mut buf = FmtText::Small(SmallText::new());
-        write!(buf, "{value}").unwrap();
-        match buf {
-            FmtText::Small(b) => Text::Small(b),
-            FmtText::Large(b) => Text::Owned(b.into()),
+
+        #[cfg(feature = "small-text")]
+        {
+            let mut buf = FmtText::Small(SmallText::new());
+            write!(buf, "{value}")?;
+            Ok(match buf {
+                FmtText::Small(b) => Self::Small(b),
+                FmtText::Large(b) => Self::Owned(b.into()),
+            })
+        }
+
+        #[cfg(not(feature = "small-text"))]
+        {
+            let mut buf = String::new();
+            write!(buf, "{value}")?;
+            Ok(Self::Owned(buf.into()))
         }
     }
 
     pub fn as_str(&self) -> &str {
         match self {
-            Text::Owned(s) => s,
-            Text::Borrowed(s) => s,
-            Text::Small(s) => s,
+            Self::Owned(s) => s,
+            Self::Borrowed(s) => s,
+            #[cfg(feature = "small-text")]
+            Self::Small(s) => s,
         }
     }
 }
@@ -40,9 +56,10 @@ impl Deref for Text<'_> {
 
     fn deref(&self) -> &Self::Target {
         match self {
-            Text::Owned(s) => s,
-            Text::Borrowed(s) => s,
-            Text::Small(s) => s,
+            Self::Owned(s) => s,
+            Self::Borrowed(s) => s,
+            #[cfg(feature = "small-text")]
+            Self::Small(s) => s,
         }
     }
 }
@@ -56,11 +73,13 @@ impl<'a> From<Cow<'a, str>> for Text<'a> {
     }
 }
 
+#[cfg(feature = "small-text")]
 enum FmtText {
     Small(SmallText),
     Large(String),
 }
 
+#[cfg(feature = "small-text")]
 impl fmt::Write for FmtText {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         match self {
