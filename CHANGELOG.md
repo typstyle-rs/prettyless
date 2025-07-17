@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.3.0 (2025-07-17)
+
+### Added
+
+- `Doc::Align`
+- `Doc::DedentToRoot`, `DocBuilder::dedent_to_root`
+- `Doc::ExpandParent`, `DocAllocator::expand_parent`
+- `Doc::LineSuffix`, `DocAllocator::line_suffix`, `DocBuilder::as_line_suffix`
+- `Doc::is_nil`
+- `DocAllocator::ascii_text` (skips `is_ascii` checks)
+- `DocBuilder::into_ref`
+- `DocBuilder::indent` and `DocBuilder::dedent` (shorthand for `DocBuilder::nest` with unsigned argument)
+- `[T; N]::pretty` (easier concatenation)
+
+### Changed
+
+- **Breaking:** Contextual functions (`DocAllocator::on_column`, `DocAllocator::on_nesting`) and related types are now optional under the `contextual` feature
+- `DocBuilder::align` works without contextual functions
+- **Breaking:** Removed `DocBuilder::hang` and the old `DocBuilder::indent` (use `doc.nest(n).align()` or `(doc + allocator.spaces(n)).nest(n).align()`)
+- Arena now avoids allocating common single-character string literals (e.g. `" "`, `";"`)
+- **Breaking:** `SmallText` and `Text::Small` variant are now optional under the `small-text` feature.
+
 ## v0.2.0 (2025-07-07)
 
 We have made significant refactoring of the codebase to optimize readability, make naming more intuitive, and added new features.
@@ -19,8 +41,8 @@ There are a large number of API changes, please check the code to understand the
 
 - Bump Rust edition to 2021
 - Upgrade `unicode-width` to 0.2
-- Rename some variants of `Doc` for clarity (breaking change)
-- Rename the printing function `Doc::pretty` → `Doc::print` to avoid ambiguity (breaking change)
+- **Breaking:** Rename some variants of `Doc` for clarity
+- **Breaking:**  Rename the printing function `Doc::pretty` → `Doc::print` to avoid ambiguity
 - Make `Debug` output for `Doc` more compact and fix matching of `SoftLine`
 
 ### Removed
