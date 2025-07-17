@@ -13,7 +13,7 @@ edition = "2021"
 [dependencies]
 # The newer versions of arrayvec are larger due to forced u32 lengths, would need to drop down Smalltext to 16 bytes
 # to not see any size increase so I'd rather stick with the older version for now
-arrayvec = "0.5"
+arrayvec = { version = "0.5", optional = true }
 typed-arena = "2.0.0"
 unicode-width = "0.2"
 
@@ -26,6 +26,7 @@ tempfile = "3.1.0"
 [features]
 default = []
 contextual = []
+small-text = ["arrayvec"]
 
 [[example]]
 name = "trees"

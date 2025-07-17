@@ -126,7 +126,7 @@ pub trait DocAllocator<'a> {
     /// The given text must not contain line breaks.
     #[inline]
     fn as_string<U: fmt::Display>(&'a self, data: U) -> DocBuilder<'a, Self> {
-        DocBuilder::from_utf8_text(self, Text::from_display(data))
+        DocBuilder::from_utf8_text(self, Text::from_display(data).unwrap())
     }
 
     /// Allocate a document containing the given text.
