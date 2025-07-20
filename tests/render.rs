@@ -352,3 +352,54 @@ fn pretty_cow() {
 
     test_snapshot!(8, doc, @"abc 123");
 }
+
+#[test]
+fn test_hard_line() {
+    let arena = Arena::new();
+    let doc = docs![&arena, "aaa", Doc::hard_line(), Doc::hard_line(), "bbb"].nest(2);
+
+    test_snapshot!(80, doc, @"aaa\n  \n  bbb");
+}
+
+#[test]
+fn test_weak_space() {
+    let arena = Arena::new();
+    let doc = arena
+        .pretty((
+            Doc::weak_space(),
+            "aaa",
+            Doc::weak_space(),
+            Doc::weak_line(),
+            Doc::weak_space(),
+            "bbb",
+        ))
+        .nest(2);
+
+    test_snapshot!(80, doc, @"aaa \n  bbb");
+}
+
+#[test]
+fn test_weak_line() {
+    let arena = Arena::new();
+    let doc = arena.pretty((
+        "(",
+        arena
+            .pretty((
+                Doc::weak_line(),
+                (
+                    "aaa",
+                    ",",
+                    Doc::weak_space(),
+                    "// comment",
+                    Doc::weak_line(),
+                ),
+                Doc::weak_line(),
+                ("bbb", ","),
+            ))
+            .indent(2),
+        Doc::weak_line(),
+        ")",
+    ));
+
+    test_snapshot!(80, doc, @"(\n  aaa, // comment\n  bbb,\n)");
+}

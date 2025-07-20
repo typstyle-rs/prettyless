@@ -100,22 +100,14 @@ impl Render for BufferWrite {
     fn fail_doc(&self) -> Self::Error {}
 }
 
-pub(super) fn write_newline<W>(ind: usize, out: &mut W) -> Result<(), W::Error>
-where
-    W: ?Sized + Render,
-{
-    out.write_str_all("\n")?;
-    write_spaces(ind, out)
-}
-
 pub(super) fn write_spaces<W>(spaces: usize, out: &mut W) -> Result<(), W::Error>
 where
     W: ?Sized + Render,
 {
-    let mut inserted = 0;
-    while inserted < spaces {
-        let insert = SPACES.len().min(spaces - inserted);
-        inserted += out.write_str(&SPACES[..insert])?;
+    let mut remaining = spaces;
+    while remaining > 0 {
+        let insert = SPACES.len().min(remaining);
+        remaining -= out.write_str(&SPACES[..insert])?;
     }
 
     Ok(())

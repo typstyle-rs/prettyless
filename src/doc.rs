@@ -33,9 +33,11 @@ where
     Fail,
 
     // Texts
+    WeakSpace,
+    HardLine,
+    WeakLine,
     Text(Text<'a>),
     TextWithLen(usize, T), // Stores the length of a string document that is not just ascii
-    HardLine,
 
     // Structural
     Append(T, T),  // Sequencing
@@ -129,7 +131,9 @@ where
             Doc::Nil => f.write_str("Nil"),
             Doc::Fail => f.write_str("Fail"),
 
+            Doc::WeakSpace => f.write_str("WeakSpace"),
             Doc::HardLine => f.write_str("HardLine"),
+            Doc::WeakLine => f.write_str("WeakLine"),
             Doc::TextWithLen(_, d) => d.fmt(f),
             Doc::Text(s) => s.fmt(f),
 
@@ -402,8 +406,18 @@ macro_rules! impl_doc_methods {
             }
 
             #[inline]
+            pub fn weak_line() -> Self {
+                Doc::WeakLine.into()
+            }
+
+            #[inline]
             pub fn space() -> Self {
                 Doc::Text(Text::Borrowed(" ")).into()
+            }
+
+            #[inline]
+            pub fn weak_space() -> Self {
+                Doc::WeakSpace.into()
             }
 
             /// Make the parent group break
