@@ -144,7 +144,9 @@
 
 mod alloc;
 mod builder;
+pub mod combinators;
 mod doc;
+pub mod prelude;
 mod render;
 pub mod text;
 pub(crate) mod visitor;

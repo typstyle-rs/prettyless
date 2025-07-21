@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `combinators` module: allocator-free combinators implementing `Pretty`. `nil`, `fail`, `hard_line`, `line_or_nil`, `line_or_space`, `soft_line_or_nil`, `soft_line_or_space`, `space`, `spaces`, `as_string`, `expand_parent`, `line_suffix`, `nest`/`indent`/`dedent`, `group`, `align`, `dedent_to_root`, `flatten`, `union`, `partial_union`, `flat_alt`, `concat`, `intersperse`, `repeat`, and (under `contextual`) `on_column`/`on_nesting`.
+- `prelude` re-exports the combinators.
+- `intersperse(separator)(docs)` and `repeat(times)(doc)` are curried like `nest(offset)(doc)`; the returned function clones the separator, so it can be applied repeatedly.
+
+### Changed
+
+- **Behavior:** `DocBuilder::indent`/`dedent` and `combinators::indent`/`dedent` panic on offsets above `isize::MAX` instead of silently reinterpreting them as negative offsets.
+
 ## v0.3.0 (2025-07-17)
 
 ### Added
@@ -42,7 +54,7 @@ There are a large number of API changes, please check the code to understand the
 - Bump Rust edition to 2021
 - Upgrade `unicode-width` to 0.2
 - **Breaking:** Rename some variants of `Doc` for clarity
-- **Breaking:**  Rename the printing function `Doc::pretty` → `Doc::print` to avoid ambiguity
+- **Breaking:** Rename the printing function `Doc::pretty` → `Doc::print` to avoid ambiguity
 - Make `Debug` output for `Doc` more compact and fix matching of `SoftLine`
 
 ### Removed
