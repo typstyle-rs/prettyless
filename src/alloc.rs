@@ -41,9 +41,16 @@ pub trait DocAllocator<'a> {
         DocBuilder(self, Doc::Fail.into())
     }
 
-    /// Allocate a single hardline.
+    /// Allocate a single hard line.
+    #[deprecated(note = "use `hard_line` instead")]
     #[inline]
     fn hardline(&'a self) -> DocBuilder<'a, Self> {
+        DocBuilder(self, Doc::HardLine.into())
+    }
+
+    /// Allocate a single hard line.
+    #[inline]
+    fn hard_line(&'a self) -> DocBuilder<'a, Self> {
         DocBuilder(self, Doc::HardLine.into())
     }
 
@@ -55,7 +62,7 @@ pub trait DocAllocator<'a> {
     /// A line acts like a `\n` but behaves like `space` if it is grouped on a single line.
     #[inline]
     fn line(&'a self) -> DocBuilder<'a, Self> {
-        self.hardline().flat_alt(self.space())
+        self.hard_line().flat_alt(self.space())
     }
 
     /// Acts like `line` but behaves like `nil` if grouped on a single line
@@ -80,7 +87,7 @@ pub trait DocAllocator<'a> {
     /// ```
     #[inline]
     fn line_(&'a self) -> DocBuilder<'a, Self> {
-        self.hardline().flat_alt(self.nil())
+        self.hard_line().flat_alt(self.nil())
     }
 
     /// A `softline` acts like `space` if the document fits the page, otherwise like `line`
@@ -190,7 +197,7 @@ pub trait DocAllocator<'a> {
     ///
     /// let doc = arena.text("a")
     ///     + arena.line_suffix(" // 1")
-    ///     + arena.hardline()
+    ///     + arena.hard_line()
     ///     + arena.line_suffix(" // 2")
     ///     + arena.text("b");
     /// assert_eq!(doc.print(5).to_string(), "a // 1\nb // 2");

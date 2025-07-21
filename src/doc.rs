@@ -22,12 +22,13 @@ pub trait StaticDoc<'a>: DocPtr<'a> {
 ///
 /// The `T` parameter is used to abstract over pointers to `Doc`. See `RefDoc` and `BoxDoc` for how
 /// it is used
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub enum Doc<'a, T>
 where
     T: DocPtr<'a>,
 {
     // Primitives
+    #[default]
     Nil,
     Fail,
 
@@ -95,15 +96,6 @@ where
         DocBuilder(T::ALLOCATOR, self.into())
             .flat_alt(doc)
             .into_plain_doc()
-    }
-}
-
-impl<'a, T> Default for Doc<'a, T>
-where
-    T: DocPtr<'a>,
-{
-    fn default() -> Self {
-        Self::Nil
     }
 }
 
@@ -396,9 +388,16 @@ macro_rules! impl_doc_methods {
                 Doc::Fail.into()
             }
 
-            /// A single hardline.
+            /// A single hard line.
+            #[deprecated(note = "use `hard_line` instead")]
             #[inline]
             pub fn hardline() -> Self {
+                Doc::HardLine.into()
+            }
+
+            /// A single hard line.
+            #[inline]
+            pub fn hard_line() -> Self {
                 Doc::HardLine.into()
             }
 
@@ -420,13 +419,13 @@ macro_rules! impl_doc_methods {
             /// A line acts like a `\n` but behaves like `space` if it is grouped on a single line.
             #[inline]
             pub fn line() -> Self {
-                Self::hardline().flat_alt(Self::space()).into()
+                Self::hard_line().flat_alt(Self::space()).into()
             }
 
             /// Acts like `line` but behaves like `nil` if grouped on a single line
             #[inline]
             pub fn line_() -> Self {
-                Self::hardline().flat_alt(Self::nil()).into()
+                Self::hard_line().flat_alt(Self::nil()).into()
             }
         }
     };
