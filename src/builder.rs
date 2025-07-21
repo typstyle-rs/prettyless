@@ -255,18 +255,26 @@ where
 
     /// Increases the indentation level of this document by the given number of spaces.
     ///
-    /// This is equivalent to calling `nest(offset as isize)`.
+    /// This is equivalent to calling `nest(nesting_offset(offset))`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `offset` does not fit in `isize`.
     #[inline]
     pub fn indent(self, offset: usize) -> Self {
-        self.nest(offset as isize)
+        self.nest(nesting_offset(offset))
     }
 
     /// Decreases the indentation level of this document by the given number of spaces.
     ///
-    /// This is equivalent to calling `nest(-(offset as isize))`.
+    /// This is equivalent to calling `nest(-nesting_offset(offset))`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `offset` does not fit in `isize`.
     #[inline]
     pub fn dedent(self, offset: usize) -> Self {
-        self.nest(-(offset as isize))
+        self.nest(-nesting_offset(offset))
     }
 
     /// Dedents to the root level, which is always 0.
@@ -492,4 +500,17 @@ where
     fn add_assign(&mut self, other: P) {
         *self = Self(self.0, std::mem::take(&mut self.1)).append(other)
     }
+}
+
+/// Converts an unsigned nesting offset, panicking if it does not fit in `isize`.
+///
+/// Interpreting the value with `as` would silently turn offsets above `isize::MAX` into negative
+/// ones, changing the direction of the nesting.
+#[inline]
+pub(crate) const fn nesting_offset(offset: usize) -> isize {
+    assert!(
+        offset <= isize::MAX as usize,
+        "nesting offset must not exceed isize::MAX"
+    );
+    offset as isize
 }
