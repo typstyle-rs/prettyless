@@ -11,13 +11,13 @@ macro_rules! chain {
 }
 
 #[macro_export]
-macro_rules! test {
-    ($size:expr, $actual:expr, $expected:expr) => {
+macro_rules! test_snapshot {
+    ($size:expr, $doc:expr, @$expected:literal) => {
         let mut s = String::new();
-        $actual.render_fmt($size, &mut s).unwrap();
-        difference::assert_diff!(&s, $expected, "\n", 0);
+        $doc.render_fmt($size, &mut s).unwrap();
+        insta::assert_snapshot!(s, @$expected)
     };
-    ($actual:expr, $expected:expr) => {
-        test!(70, $actual, $expected)
+    ($doc:expr, @$expected:expr) => {
+        test_snapshot!(70, $doc, @$expected)
     };
 }

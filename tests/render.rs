@@ -12,7 +12,7 @@ fn box_doc_inference() {
             .append(BoxDoc::text("test")),
     );
 
-    test!(doc, "test test");
+    test_snapshot!(doc, @"test test");
 }
 
 #[test]
@@ -25,7 +25,11 @@ fn newline_in_text() {
         ),
     );
 
-    test!(5, doc, "test\n    \"test\n     test\"");
+    test_snapshot!(5, doc, @r#"
+    test
+        "test
+         test"
+    "#);
 }
 
 #[test]
@@ -36,7 +40,10 @@ fn forced_newline() {
             .append(BoxDoc::text("test")),
     );
 
-    test!(doc, "test\ntest");
+    test_snapshot!(doc, @r"
+    test
+    test
+    ");
 }
 
 #[test]
@@ -45,7 +52,10 @@ fn space_do_not_reset_pos() {
         .append(BoxDoc::text("test"))
         .append(BoxDoc::group(BoxDoc::line()).append(BoxDoc::text("test")));
 
-    test!(9, doc, "test test\ntest");
+    test_snapshot!(9, doc, @r"
+    test test
+    test
+    ");
 }
 
 // Tests that the `BoxDoc::hardline()` does not cause the rest of document to think that it fits on
@@ -60,7 +70,11 @@ fn newline_does_not_cause_next_line_to_be_to_long() {
         ),
     );
 
-    test!(6, doc, "test\ntest\ntest");
+    test_snapshot!(6, doc, @r"
+    test
+    test
+    test
+    ");
 }
 
 #[test]
@@ -68,7 +82,7 @@ fn newline_after_group_does_not_affect_it() {
     let arena = Arena::new();
     let doc = arena.text("x").append(arena.line()).append("y").group();
 
-    test!(100, doc.append(arena.hardline()).1, "x y\n");
+    test_snapshot!(100, doc.append(arena.hardline()).1, @"x y");
 }
 
 #[test]
@@ -86,7 +100,12 @@ fn block() {
             .append(RcDoc::text("}")),
     );
 
-    test!(5, doc, "{\n  test\n  test\n}");
+    test_snapshot!(5, doc, @r"
+    {
+      test
+      test
+    }
+    ");
 }
 
 #[test]
@@ -104,7 +123,12 @@ fn block_with_hardline() {
             .append(RcDoc::text("}")),
     );
 
-    test!(10, doc, "{\n  test\n  test\n}");
+    test_snapshot!(10, doc, @r"
+    {
+      test
+      test
+    }
+    ");
 }
 
 #[test]
@@ -122,7 +146,12 @@ fn block_with_hardline_negative_nest() {
             .append(RcDoc::text("}")),
     );
 
-    test!(10, doc, "{\ntest\ntest\n}");
+    test_snapshot!(10, doc, @r"
+    {
+    test
+    test
+    }
+    ");
 }
 
 #[test]
@@ -141,7 +170,13 @@ fn line_comment() {
             .append(BoxDoc::text("}")),
     );
 
-    test!(14, doc, "{\n  test\n  // a\n  test\n}");
+    test_snapshot!(14, doc, @r"
+    {
+      test
+      // a
+      test
+    }
+    ");
 }
 
 fn hang2(
@@ -184,10 +219,12 @@ fn hang_lambda2() {
     let trailer = BoxDoc::nil();
 
     let doc = hang2(from, BoxDoc::line(), body, trailer);
-    eprintln!("{doc:#?}");
 
-    test!(doc, "let x = \\y -> y");
-    test!(14, doc, "let x = \\y ->\n  y");
+    test_snapshot!(doc, @r"let x = \y -> y");
+    test_snapshot!(14, doc, @r"
+    let x = \y ->
+      y
+    ");
 }
 
 #[test]
@@ -210,8 +247,13 @@ fn union2() {
 
     let doc = hang2(from, BoxDoc::line_(), body, trailer);
 
-    test!(doc, "let x = (x, 1234567890,)");
-    test!(14, doc, "let x = (\n  x,\n  1234567890,\n)");
+    test_snapshot!(doc, @"let x = (x, 1234567890,)");
+    test_snapshot!(14, doc, @r"
+    let x = (
+      x,
+      1234567890,
+    )
+    ");
 }
 
 #[test]
@@ -224,7 +266,7 @@ fn line_suffix_with_union() {
         + (arena.line_suffix(" // 3") + arena.text("6666666"))
             .union(arena.line_suffix(" // 4") + arena.text("77"));
 
-    test!(5, doc, "aa77 // 1 // 4");
+    test_snapshot!(5, doc, @"aa77 // 1 // 4");
 }
 
 #[test]
@@ -236,7 +278,7 @@ fn line_suffix_with_union2() {
         + (arena.line_suffix(" // 3") + arena.hardline() + arena.text("xxxxxxx"))
             .union(arena.line_suffix(" // 4") + arena.text("yyy"));
 
-    test!(5, doc, "ayyy // 1 // 4");
+    test_snapshot!(5, doc, @"ayyy // 1 // 4");
 }
 
 #[test]
@@ -247,7 +289,7 @@ fn usize_max_value() {
             .append(BoxDoc::text("test")),
     );
 
-    test!(usize::MAX, doc, "test test");
+    test_snapshot!(usize::MAX, doc, @"test test");
 }
 
 #[test]
@@ -256,8 +298,8 @@ fn fail() {
 
     let doc = fail_break.append(Doc::text("12345")).group().union("abc");
 
-    test!(5, doc, "12345");
-    test!(4, doc, "abc");
+    test_snapshot!(5, doc, @"12345");
+    test_snapshot!(4, doc, @"abc");
 }
 
 #[test]
@@ -268,7 +310,7 @@ fn non_ascii_is_not_byte_length() {
             .append(BoxDoc::text("test")),
     );
 
-    test!(8, doc, "ÅÄÖ test");
+    test_snapshot!(8, doc, @"ÅÄÖ test");
 }
 
 #[test]
@@ -279,7 +321,10 @@ fn cjk_display_width() {
         .append(arena.line().append(arena.text("abc")).align())
         .into_doc();
 
-    test!(doc, "你好\n    abc");
+    test_snapshot!(doc, @r"
+    你好
+        abc
+    ");
 }
 
 #[test]
@@ -293,5 +338,5 @@ fn pretty_cow() {
     .group()
     .into_doc();
 
-    test!(8, doc, "abc 123");
+    test_snapshot!(8, doc, @"abc 123");
 }

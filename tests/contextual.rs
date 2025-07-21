@@ -28,20 +28,16 @@ fn hang_lambda1() {
     ]
     .group();
 
-    test!(doc, "let x = \\y -> y");
-    test!(
-        8,
-        doc,
-        r"let x =
-  \y ->
-    y"
-    );
-    test!(
-        14,
-        doc,
-        r"let x = \y ->
-  y"
-    );
+    test_snapshot!(doc, @r"let x = \y -> y");
+    test_snapshot!(8, doc, @r"
+    let x =
+      \y ->
+        y
+    ");
+    test_snapshot!(14, doc, @r"
+    let x = \y ->
+      y
+    ");
 }
 
 #[test]
@@ -56,8 +52,17 @@ fn hang_comment() {
     ]
     .group();
 
-    test!(8, doc, "let x =\n  \\y ->\n    // abc\n    y");
-    test!(14, doc, "let x = \\y ->\n  // abc\n  y");
+    test_snapshot!(8, doc, @r"
+    let x =
+      \y ->
+        // abc
+        y
+    ");
+    test_snapshot!(14, doc, @r"
+    let x = \y ->
+      // abc
+      y
+    ");
 }
 
 #[test]
@@ -79,7 +84,18 @@ fn union() {
     ]
     .group();
 
-    test!(doc, "let x = (x, 1234567890,)");
-    test!(8, doc, "let x =\n  (\n    x,\n    1234567890,\n  )");
-    test!(14, doc, "let x = (\n  x,\n  1234567890,\n)");
+    test_snapshot!(doc, @"let x = (x, 1234567890,)");
+    test_snapshot!(8, doc, @r"
+    let x =
+      (
+        x,
+        1234567890,
+      )
+    ");
+    test_snapshot!(14, doc, @r"
+    let x = (
+      x,
+      1234567890,
+    )
+    ");
 }
