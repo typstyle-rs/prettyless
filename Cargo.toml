@@ -19,9 +19,8 @@ unicode-width = "0.2"
 
 [dev-dependencies]
 criterion = "0.6"
-difference = "2"
-expect-test = "1"
-tempfile = "3.1.0"
+insta = "1.43"
+tempfile = "3"
 
 [features]
 default = []
