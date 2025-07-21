@@ -47,7 +47,7 @@ fn hang_comment() {
         chain!["let", BoxDoc::line(), "x", BoxDoc::line(), "="].group(),
         nest_on_line(chain![
             "\\y ->",
-            nest_on_line(chain!["// abc", BoxDoc::hardline(), body])
+            nest_on_line(chain!["// abc", BoxDoc::hard_line(), body])
         ]),
     ]
     .group();

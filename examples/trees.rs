@@ -24,8 +24,8 @@ impl<'a> Forest<'a> {
         } else {
             allocator
                 .text("[")
-                .append(allocator.hardline().append(self.pretty(allocator)).nest(2))
-                .append(allocator.hardline())
+                .append(allocator.hard_line().append(self.pretty(allocator)).nest(2))
+                .append(allocator.hard_line())
                 .append(allocator.text("]"))
         }
     }
@@ -36,7 +36,7 @@ impl<'a> Forest<'a> {
         D::Doc: Clone,
     {
         let forest = self.0;
-        let separator = allocator.text(",").append(allocator.hardline());
+        let separator = allocator.text(",").append(allocator.hard_line());
         allocator.intersperse(forest.iter().map(|tree| tree.pretty(allocator)), separator)
     }
 }

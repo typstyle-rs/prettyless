@@ -284,7 +284,7 @@ where
                     }
 
                     Doc::HardLine => {
-                        // A hardline only “fits” in break mode.
+                        // A hard_line only “fits” in break mode.
                         return mode == Mode::Break;
                     }
 

@@ -277,8 +277,8 @@ where
     /// let arena = Arena::new();
     /// let doc = (
     ///     arena.text("a")
-    ///     + (arena.text("b") + arena.hardline() + arena.text("c")).dedent_to_root()
-    ///     + arena.hardline()
+    ///     + (arena.text("b") + arena.hard_line() + arena.text("c")).dedent_to_root()
+    ///     + arena.hard_line()
     ///     + arena.text("e")
     /// ).indent(4);
     /// assert_eq!(doc.print(10).to_string(), "ab\nc\n    e");
@@ -308,7 +308,7 @@ where
     ///     "lorem",
     ///     " ",
     ///     arena.intersperse(["ipsum", "dolor"].iter().cloned(), arena.line_()).align(),
-    ///     arena.hardline(),
+    ///     arena.hard_line(),
     ///     "next",
     /// ];
     /// assert_eq!(
@@ -334,8 +334,8 @@ where
     /// use prettyless::{Arena, DocAllocator};
     ///
     /// let arena = Arena::new();
-    /// let doc = (arena.text("short") + arena.hardline() + arena.text("long long long"))
-    ///        .union(arena.text("short") + arena.hardline() + arena.text("short"));
+    /// let doc = (arena.text("short") + arena.hard_line() + arena.text("long long long"))
+    ///        .union(arena.text("short") + arena.hard_line() + arena.text("short"));
     /// assert_eq!(doc.print(10).to_string(), "short\nshort");
     /// ```
     #[inline]
@@ -355,8 +355,8 @@ where
     /// use prettyless::{Arena, DocAllocator};
     ///
     /// let arena = Arena::new();
-    /// let doc = (arena.text("short") + arena.hardline() + arena.text("long long long"))
-    ///        .partial_union(arena.text("short") + arena.hardline() + arena.text("short"));
+    /// let doc = (arena.text("short") + arena.hard_line() + arena.text("long long long"))
+    ///        .partial_union(arena.text("short") + arena.hard_line() + arena.text("short"));
     /// assert_eq!(doc.print(10).to_string(), "short\nlong long long");
     /// ```
     #[inline]

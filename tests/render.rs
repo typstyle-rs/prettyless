@@ -36,7 +36,7 @@ fn newline_in_text() {
 fn forced_newline() {
     let doc = BoxDoc::group(
         BoxDoc::text("test")
-            .append(BoxDoc::hardline())
+            .append(BoxDoc::hard_line())
             .append(BoxDoc::text("test")),
     );
 
@@ -58,12 +58,12 @@ fn space_do_not_reset_pos() {
     ");
 }
 
-// Tests that the `BoxDoc::hardline()` does not cause the rest of document to think that it fits on
+// Tests that the `BoxDoc::hard_line()` does not cause the rest of document to think that it fits on
 // a single line but instead breaks on the `BoxDoc::line()` to fit with 6 columns
 #[test]
 fn newline_does_not_cause_next_line_to_be_to_long() {
     let doc = RcDoc::group(
-        RcDoc::text("test").append(RcDoc::hardline()).append(
+        RcDoc::text("test").append(RcDoc::hard_line()).append(
             RcDoc::text("test")
                 .append(RcDoc::line())
                 .append(RcDoc::text("test")),
@@ -82,7 +82,7 @@ fn newline_after_group_does_not_affect_it() {
     let arena = Arena::new();
     let doc = arena.text("x").append(arena.line()).append("y").group();
 
-    test_snapshot!(100, doc.append(arena.hardline()).1, @"x y");
+    test_snapshot!(100, doc.append(arena.hard_line()).1, @"x y");
 }
 
 #[test]
@@ -115,7 +115,7 @@ fn block_with_hardline() {
             .append(
                 RcDoc::line()
                     .append(RcDoc::text("test"))
-                    .append(RcDoc::hardline())
+                    .append(RcDoc::hard_line())
                     .append(RcDoc::text("test"))
                     .nest(2),
             )
@@ -138,7 +138,7 @@ fn block_with_hardline_negative_nest() {
             .append(
                 RcDoc::line()
                     .append(RcDoc::text("test"))
-                    .append(RcDoc::hardline())
+                    .append(RcDoc::hard_line())
                     .append(RcDoc::text("test"))
                     .nest(-2),
             )
@@ -162,7 +162,7 @@ fn line_comment() {
                 BoxDoc::line()
                     .append(BoxDoc::text("test"))
                     .append(BoxDoc::line())
-                    .append(BoxDoc::text("// a").append(BoxDoc::hardline()))
+                    .append(BoxDoc::text("// a").append(BoxDoc::hard_line()))
                     .append(BoxDoc::text("test"))
                     .nest(2),
             )
@@ -190,7 +190,7 @@ fn hang2(
         .nest(2)
         .group()
         .append(trailer.clone());
-    let body2 = BoxDoc::hardline()
+    let body2 = BoxDoc::hard_line()
         .append(body.clone())
         .nest(2)
         .group()
@@ -275,7 +275,7 @@ fn line_suffix_with_union2() {
 
     let doc = arena.line_suffix(" // 1")
         + arena.text("a")
-        + (arena.line_suffix(" // 3") + arena.hardline() + arena.text("xxxxxxx"))
+        + (arena.line_suffix(" // 3") + arena.hard_line() + arena.text("xxxxxxx"))
             .union(arena.line_suffix(" // 4") + arena.text("yyy"));
 
     test_snapshot!(5, doc, @"ayyy // 1 // 4");
