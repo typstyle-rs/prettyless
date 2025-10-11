@@ -285,6 +285,48 @@ where
     }
 }
 
+// the muncher: each invocation generates an impl for the current length,
+// then calls itself on the remaining identifiers (dropping the first identifier).
+macro_rules! impl_pretty_for_tuples {
+    ($head:ident $($rest:ident)*) => {
+        impl<'a, D, $head, $($rest),*> Pretty<'a, D> for ($head, $($rest),*)
+        where
+            D: ?Sized + DocAllocator<'a>,
+            $head: Pretty<'a, D>,
+            $($rest: Pretty<'a, D>),*
+        {
+            /// Concatenates all items of the tuple with the given allocator.
+            #[allow(non_snake_case, unused_mut)]
+            #[inline]
+            fn pretty(self, allocator: &'a D) -> DocBuilder<'a, D> {
+                let ($head, $($rest),*) = self;
+                let mut doc = allocator.pretty($head);
+                $(
+                    doc = doc.append($rest);
+                )*
+                doc
+            }
+        }
+
+        impl_pretty_for_tuples!($($rest)*);
+    };
+
+    () => {
+        impl<'a, D> Pretty<'a, D> for ()
+        where
+            D: ?Sized + DocAllocator<'a>,
+        {
+            /// The unit type pretty-prints as the empty document.
+            fn pretty(self, allocator: &'a D) -> DocBuilder<'a, D> {
+                allocator.nil()
+            }
+        }
+    };
+}
+
+// kick off the recursion with T0..T15
+impl_pretty_for_tuples!(T0 T1 T2 T3 T4 T5 T6 T7 T8 T9 T10 T11 T12 T13 T14 T15);
+
 /// Concatenates a number of documents (or values that can be converted into a document via the
 /// `Pretty` trait, like `&str`)
 ///
@@ -315,4 +357,30 @@ macro_rules! docs {
         )*
         doc
     }}
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_pretty_tuples() {
+        use crate::*;
+
+        let arena = Arena::new();
+
+        let doc = ().pretty(&arena);
+        assert_eq!(doc.print(80).to_string(), "");
+
+        let doc = ("1",).pretty(&arena);
+        assert_eq!(doc.print(80).to_string(), "1");
+
+        let doc = ("1", " + ").pretty(&arena);
+        assert_eq!(doc.print(80).to_string(), "1 + ");
+
+        let doc = ("1", " + ", "2", " = ", "3").pretty(&arena);
+        assert_eq!(doc.print(80).to_string(), "1 + 2 = 3");
+
+        // nested
+        let doc = (("a", " * "), "b", (" = ", "c")).pretty(&arena);
+        assert_eq!(doc.print(80).to_string(), "a * b = c");
+    }
 }

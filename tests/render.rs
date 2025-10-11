@@ -207,14 +207,18 @@ fn hang2(
 
 #[test]
 fn hang_lambda2() {
-    let from = chain![
-        chain!["let", BoxDoc::line(), "x", BoxDoc::line(), "="].group(),
-        BoxDoc::line(),
-        "\\y ->",
-    ]
-    .group();
+    let from = BoxAllocator
+        .pretty((
+            BoxAllocator
+                .pretty(("let", BoxDoc::line(), "x", BoxDoc::line(), "="))
+                .group(),
+            BoxDoc::line(),
+            "\\y ->",
+        ))
+        .group()
+        .into_doc();
 
-    let body = chain!["y"].group();
+    let body = BoxAllocator.pretty("y").group().into_doc();
 
     let trailer = BoxDoc::nil();
 
@@ -229,19 +233,25 @@ fn hang_lambda2() {
 
 #[test]
 fn union2() {
-    let from = chain![
-        chain!["let", BoxDoc::line(), "x", BoxDoc::line(), "="].group(),
-        BoxDoc::line(),
-        "(",
-    ]
-    .group();
+    let from = BoxAllocator
+        .pretty((
+            BoxAllocator
+                .pretty(("let", BoxDoc::line(), "x", BoxDoc::line(), "="))
+                .group(),
+            BoxDoc::line(),
+            "(",
+        ))
+        .group()
+        .into_doc();
 
-    let body = chain![
-        chain!["x", ","].group(),
-        BoxDoc::line(),
-        chain!["1234567890", ","].group()
-    ]
-    .group();
+    let body = BoxAllocator
+        .pretty((
+            BoxAllocator.pretty(("x", ",")).group(),
+            BoxDoc::line(),
+            BoxAllocator.pretty(("1234567890", ",")).group(),
+        ))
+        .group()
+        .into_doc();
 
     let trailer = BoxDoc::line_().append(")");
 
@@ -260,11 +270,13 @@ fn union2() {
 fn line_suffix_with_union() {
     let arena = Arena::new();
 
-    let doc = arena.text("a")
-        + arena.line_suffix(" // 1")
-        + arena.text("a")
-        + (arena.line_suffix(" // 3") + arena.text("6666666"))
-            .union(arena.line_suffix(" // 4") + arena.text("77"));
+    let doc = arena.pretty((
+        arena.text("a"),
+        arena.line_suffix(" // 1"),
+        arena.text("a"),
+        (arena.line_suffix(" // 3") + arena.text("6666666"))
+            .union(arena.line_suffix(" // 4") + arena.text("77")),
+    ));
 
     test_snapshot!(5, doc, @"aa77 // 1 // 4");
 }
@@ -273,10 +285,12 @@ fn line_suffix_with_union() {
 fn line_suffix_with_union2() {
     let arena = Arena::new();
 
-    let doc = arena.line_suffix(" // 1")
-        + arena.text("a")
-        + (arena.line_suffix(" // 3") + arena.hard_line() + arena.text("xxxxxxx"))
-            .union(arena.line_suffix(" // 4") + arena.text("yyy"));
+    let doc = arena.pretty((
+        arena.line_suffix(" // 1"),
+        arena.text("a"),
+        (arena.line_suffix(" // 3") + arena.hard_line() + arena.text("xxxxxxx"))
+            .union(arena.line_suffix(" // 4") + arena.text("yyy")),
+    ));
 
     test_snapshot!(5, doc, @"ayyy // 1 // 4");
 }
@@ -318,8 +332,7 @@ fn cjk_display_width() {
     let arena = Arena::new();
     let doc = arena
         .text("你好")
-        .append(arena.line().append(arena.text("abc")).align())
-        .into_doc();
+        .append(arena.line().append(arena.text("abc")).align());
 
     test_snapshot!(doc, @r"
     你好
@@ -329,14 +342,13 @@ fn cjk_display_width() {
 
 #[test]
 fn pretty_cow() {
-    let doc = docs![
-        &BoxAllocator,
-        Cow::<str>::Borrowed("abc"),
-        BoxDoc::line(),
-        Cow::<str>::Owned("123".to_string()),
-    ]
-    .group()
-    .into_doc();
+    let doc = BoxAllocator
+        .pretty((
+            Cow::<str>::Borrowed("abc"),
+            BoxDoc::line(),
+            Cow::<str>::Owned("123".to_string()),
+        ))
+        .group();
 
     test_snapshot!(8, doc, @"abc 123");
 }
