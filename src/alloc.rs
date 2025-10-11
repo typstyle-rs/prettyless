@@ -65,6 +65,11 @@ pub trait DocAllocator<'a> {
         self.ascii_text(" ")
     }
 
+    #[inline]
+    fn weak_space(&'a self) -> DocBuilder<'a, Self> {
+        DocBuilder(self, Doc::WeakSpace.into())
+    }
+
     /// A line acts like a `\n` but behaves like `space` if it is grouped on a single line.
     #[inline]
     fn line(&'a self) -> DocBuilder<'a, Self> {
@@ -106,6 +111,16 @@ pub trait DocAllocator<'a> {
     #[inline]
     fn softline_(&'a self) -> DocBuilder<'a, Self> {
         self.line_().group()
+    }
+
+    #[inline]
+    fn weak_line(&'a self) -> DocBuilder<'a, Self> {
+        DocBuilder(self, Doc::WeakLine.into()).flat_alt(self.space())
+    }
+
+    #[inline]
+    fn weak_line_(&'a self) -> DocBuilder<'a, Self> {
+        DocBuilder(self, Doc::WeakLine.into()).flat_alt(self.nil())
     }
 
     /// Equivalent to `self.nil().flat_alt(doc.pretty(self))`

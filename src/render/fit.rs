@@ -1,6 +1,6 @@
-use crate::{visitor::visit_sequence_rev, Doc, DocPtr, Render};
+use crate::{render::write::write_spaces, visitor::visit_sequence_rev, Doc, DocPtr, Render};
 
-use super::write::{write_newline, BufferWrite};
+use super::write::BufferWrite;
 
 pub fn print_doc<'a, W, T>(doc: &Doc<'a, T>, width: usize, out: &mut W) -> Result<(), W::Error>
 where
@@ -8,12 +8,13 @@ where
     W: ?Sized + Render,
 {
     Printer {
-        pos: 0,
         cmds: vec![Cmd {
             indent: 0,
             mode: Mode::Break,
             doc,
         }],
+        pos: 0,
+        pending_indent: Some(0),
         fit_docs: vec![],
         line_suffixes: vec![],
         width,
@@ -52,8 +53,9 @@ struct Printer<'d, 'a, T>
 where
     T: DocPtr<'a> + 'a,
 {
-    pos: usize,
     cmds: Vec<Cmd<'d, 'a, T>>,
+    pos: usize,
+    pending_indent: Option<usize>,
     fit_docs: Vec<FitCmd<'d, 'a, T>>,
     line_suffixes: Vec<&'d Doc<'a, T>>,
     width: usize,
@@ -92,10 +94,14 @@ where
                     Doc::Nil => break,
                     Doc::Fail => return Err(out.fail_doc()),
 
+                    Doc::WeakSpace => {
+                        if self.pending_indent.is_none() {
+                            fits &= self.write_str(out, " ", 1)?;
+                        }
+                        break;
+                    }
                     Doc::Text(ref s) => {
-                        out.write_str_all(s)?;
-                        self.pos += s.len();
-                        fits &= self.pos <= self.width;
+                        fits &= self.write_str(out, s, s.len())?;
                         break;
                     }
 
@@ -105,9 +111,7 @@ where
                             Doc::Text(ref s) => s,
                             _ => unreachable!(),
                         };
-                        out.write_str_all(str)?;
-                        self.pos += len;
-                        fits &= self.pos <= self.width;
+                        fits &= self.write_str(out, str, len)?;
                         break;
                     }
 
@@ -122,12 +126,38 @@ where
                         // The next document may have different indentation so we should use it if
                         // we can
                         if let Some(next) = self.cmds.pop() {
-                            write_newline(next.indent, out)?;
-                            self.pos = next.indent;
+                            self.write_newline(out)?;
+                            // write_spaces(next.indent, out)?;
+                            // self.pos = next.indent;
+                            self.pending_indent = Some(next.indent);
                             cmd = next;
                         } else {
-                            write_newline(indent, out)?;
-                            self.pos = indent;
+                            self.write_newline(out)?;
+                            // write_spaces(indent, out)?;
+                            // self.pos = indent;
+                            self.pending_indent = Some(indent);
+                            break;
+                        }
+                    }
+                    Doc::WeakLine => {
+                        // flush line suffixes
+                        if self.line_suffixes.len() > ls_top {
+                            self.cmds.push(cmd);
+                            self.push_line_suffixes(ls_top, mode, indent);
+                            break;
+                        }
+
+                        if self.pending_indent.is_some() {
+                            // do not insert a newline if we are already in a fresh line
+                            break;
+                        }
+                        if let Some(next) = self.cmds.pop() {
+                            self.write_newline(out)?;
+                            self.pending_indent = Some(next.indent);
+                            cmd = next;
+                        } else {
+                            self.write_newline(out)?;
+                            self.pending_indent = Some(indent);
                             break;
                         }
                     }
@@ -154,7 +184,7 @@ where
                     }
                     Doc::Align(ref inner) => {
                         // Align to the current position.
-                        cmd.indent = self.pos;
+                        cmd.indent = self.pending_indent.unwrap_or(0) + self.pos;
                         cmd.doc = inner;
                     }
 
@@ -170,7 +200,14 @@ where
                         };
                     }
                     Doc::Group(ref inner) => {
-                        if mode == Mode::Break && self.fitting(inner, self.pos, indent, Mode::Flat)
+                        if mode == Mode::Break
+                            && self.fitting(
+                                inner,
+                                self.pos,
+                                indent,
+                                Mode::Flat,
+                                self.pending_indent,
+                            )
                         {
                             cmd.mode = Mode::Flat;
                         }
@@ -208,7 +245,15 @@ where
                         }
                     }
                     Doc::PartialUnion(ref left, ref right) => {
-                        if mode == Mode::Flat || self.fitting(left, self.pos, indent, Mode::Break) {
+                        if mode == Mode::Flat
+                            || self.fitting(
+                                left,
+                                self.pos,
+                                indent,
+                                Mode::Break,
+                                self.pending_indent,
+                            )
+                        {
                             cmd.doc = left;
                         } else {
                             cmd.doc = right;
@@ -235,6 +280,28 @@ where
         Ok(fits)
     }
 
+    fn write_str<W>(&mut self, out: &mut W, s: &str, len: usize) -> Result<bool, W::Error>
+    where
+        W: ?Sized + Render,
+    {
+        if let Some(indent) = self.pending_indent.take() {
+            write_spaces(indent, out)?;
+            self.pos = indent;
+        }
+        out.write_str_all(s)?;
+        self.pos += len;
+        Ok(self.pos <= self.width)
+    }
+
+    fn write_newline<W>(&mut self, out: &mut W) -> Result<(), W::Error>
+    where
+        W: ?Sized + Render,
+    {
+        out.write_str_all("\n")?;
+        self.pos = 0;
+        Ok(())
+    }
+
     fn push_line_suffixes(&mut self, ls_top: usize, mode: Mode, indent: usize) {
         self.line_suffixes
             .drain(ls_top..)
@@ -243,7 +310,14 @@ where
     }
 
     #[cfg_attr(not(feature = "contextual"), allow(unused_variables))]
-    fn fitting(&mut self, next: &'d Doc<'a, T>, mut pos: usize, indent: usize, mode: Mode) -> bool {
+    fn fitting(
+        &mut self,
+        next: &'d Doc<'a, T>,
+        mut pos: usize,
+        indent: usize,
+        mode: Mode,
+        mut pending_indent: Option<usize>,
+    ) -> bool {
         // We start in "flat" mode and may fall back to "break" mode when backtracking.
         let mut cmd_bottom = self.cmds.len();
 
@@ -268,7 +342,19 @@ where
                     Doc::Nil => break,
                     Doc::Fail => return false,
 
+                    Doc::WeakSpace => {
+                        if pending_indent.is_none() {
+                            pos += 1;
+                            if pos > self.width {
+                                return false;
+                            }
+                        }
+                        break;
+                    }
                     Doc::Text(ref s) => {
+                        if let Some(indent) = pending_indent.take() {
+                            pos += indent;
+                        }
                         pos += s.len();
                         if pos > self.width {
                             return false;
@@ -276,6 +362,9 @@ where
                         break;
                     }
                     Doc::TextWithLen(len, _) => {
+                        if let Some(indent) = pending_indent.take() {
+                            pos += indent;
+                        }
                         pos += len;
                         if pos > self.width {
                             return false;
@@ -283,7 +372,7 @@ where
                         break;
                     }
 
-                    Doc::HardLine => {
+                    Doc::HardLine | Doc::WeakLine => {
                         // A hard_line only “fits” in break mode.
                         return mode == Mode::Break;
                     }
