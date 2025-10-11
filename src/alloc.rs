@@ -6,6 +6,12 @@ use crate::{text::Text, BuildDoc, Doc, DocBuilder, DocPtr, Pretty, RefDoc};
 pub trait DocAllocator<'a> {
     type Doc: DocPtr<'a>;
 
+    /// Construct a `DocBuilder` from something that implements `Pretty`
+    #[inline]
+    fn pretty(&'a self, doc: impl Pretty<'a, Self>) -> DocBuilder<'a, Self> {
+        doc.pretty(self)
+    }
+
     fn alloc(&'a self, doc: Doc<'a, Self::Doc>) -> Self::Doc;
 
     #[cfg(feature = "contextual")]
