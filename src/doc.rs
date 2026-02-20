@@ -40,6 +40,7 @@ where
     // Structural
     Append(T, T),  // Sequencing
     LineSuffix(T), // A document that is appended to the end of the current line.
+    Tagged(u32, T),
 
     // Indentation and Alignment
     Nest(isize, T),  // Changes the indentation level
@@ -141,6 +142,8 @@ where
                 f.finish()
             }
             Doc::LineSuffix(ref doc) => write_compact(f, doc, "LineSuffix"),
+            // Keep tags transparent in debug output.
+            Doc::Tagged(_, ref doc) => doc.fmt(f),
 
             Doc::Nest(off, ref doc) => {
                 write!(f, "Nest({off}, ",)?;

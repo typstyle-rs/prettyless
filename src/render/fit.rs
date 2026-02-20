@@ -12,7 +12,7 @@ where
         cmds: vec![Cmd {
             indent: 0,
             mode: Mode::Break,
-            doc,
+            kind: CmdKind::Doc(doc),
         }],
         fit_docs: vec![],
         line_suffixes: vec![],
@@ -37,7 +37,16 @@ where
 {
     indent: usize,
     mode: Mode,
-    doc: &'d Doc<'a, T>,
+    kind: CmdKind<'d, 'a, T>,
+}
+
+#[derive(Clone, Copy)]
+enum CmdKind<'d, 'a, T>
+where
+    T: DocPtr<'a> + 'a,
+{
+    Doc(&'d Doc<'a, T>),
+    TagExit(u32),
 }
 
 struct FitCmd<'d, 'a, T>
@@ -87,7 +96,15 @@ where
 
             // Drill down until we hit a leaf or emit something
             loop {
-                let Cmd { indent, mode, doc } = cmd;
+                let indent = cmd.indent;
+                let mode = cmd.mode;
+                let CmdKind::Doc(doc) = cmd.kind else {
+                    let CmdKind::TagExit(id) = cmd.kind else {
+                        unreachable!();
+                    };
+                    out.on_tag_exit(id)?;
+                    break;
+                };
                 match *doc {
                     Doc::Nil => break,
                     Doc::Fail => return Err(out.fail_doc()),
@@ -134,9 +151,22 @@ where
 
                     Doc::Append(ref left, ref right) => {
                         // Push children in reverse so we process ldoc before rdoc
-                        cmd.doc = visit_sequence2(left, right, |doc| {
-                            self.cmds.push(Cmd { indent, mode, doc })
+                        cmd.kind = CmdKind::Doc(visit_sequence2(left, right, |doc| {
+                            self.cmds.push(Cmd {
+                                indent,
+                                mode,
+                                kind: CmdKind::Doc(doc),
+                            })
+                        }));
+                    }
+                    Doc::Tagged(id, ref inner) => {
+                        out.on_tag_enter(id)?;
+                        self.cmds.push(Cmd {
+                            indent,
+                            mode,
+                            kind: CmdKind::TagExit(id),
                         });
+                        cmd.kind = CmdKind::Doc(inner);
                     }
                     Doc::LineSuffix(ref inner) => {
                         self.line_suffixes.push(inner);
@@ -145,40 +175,40 @@ where
 
                     Doc::Nest(offset, ref inner) => {
                         cmd.indent = indent.saturating_add_signed(offset);
-                        cmd.doc = inner;
+                        cmd.kind = CmdKind::Doc(inner);
                     }
                     Doc::DedentToRoot(ref inner) => {
                         // Dedent to the root level, which is always 0.
                         cmd.indent = 0;
-                        cmd.doc = inner;
+                        cmd.kind = CmdKind::Doc(inner);
                     }
                     Doc::Align(ref inner) => {
                         // Align to the current position.
                         cmd.indent = self.pos;
-                        cmd.doc = inner;
+                        cmd.kind = CmdKind::Doc(inner);
                     }
 
                     Doc::ExpandParent => break,
                     Doc::Flatten(ref inner) => {
                         cmd.mode = Mode::Flat;
-                        cmd.doc = inner;
+                        cmd.kind = CmdKind::Doc(inner);
                     }
                     Doc::BreakOrFlat(ref break_doc, ref flat_doc) => {
-                        cmd.doc = match mode {
+                        cmd.kind = CmdKind::Doc(match mode {
                             Mode::Break => break_doc,
                             Mode::Flat => flat_doc,
-                        };
+                        });
                     }
                     Doc::Group(ref inner) => {
                         if mode == Mode::Break && self.fitting(inner, self.pos, indent, Mode::Flat)
                         {
                             cmd.mode = Mode::Flat;
                         }
-                        cmd.doc = inner;
+                        cmd.kind = CmdKind::Doc(inner);
                     }
                     Doc::Union(ref left, ref right) => {
                         if mode == Mode::Flat {
-                            cmd.doc = left;
+                            cmd.kind = CmdKind::Doc(left);
                             continue;
                         }
 
@@ -192,7 +222,7 @@ where
                         self.cmds.push(Cmd {
                             indent,
                             mode,
-                            doc: left,
+                            kind: CmdKind::Doc(left),
                         });
                         let mut buffer = BufferWrite::new();
 
@@ -204,24 +234,24 @@ where
                             self.pos = save_pos;
                             self.cmds.truncate(save_state.cmd_top);
                             self.line_suffixes.truncate(save_state.line_suffix_top);
-                            cmd.doc = right;
+                            cmd.kind = CmdKind::Doc(right);
                         }
                     }
                     Doc::PartialUnion(ref left, ref right) => {
                         if mode == Mode::Flat || self.fitting(left, self.pos, indent, Mode::Break) {
-                            cmd.doc = left;
+                            cmd.kind = CmdKind::Doc(left);
                         } else {
-                            cmd.doc = right;
+                            cmd.kind = CmdKind::Doc(right);
                         }
                     }
 
                     #[cfg(feature = "contextual")]
                     Doc::OnColumn(ref f) => {
-                        cmd.doc = self.temp_arena.alloc(f(self.pos));
+                        cmd.kind = CmdKind::Doc(self.temp_arena.alloc(f(self.pos)));
                     }
                     #[cfg(feature = "contextual")]
                     Doc::OnNesting(ref f) => {
-                        cmd.doc = self.temp_arena.alloc(f(indent));
+                        cmd.kind = CmdKind::Doc(self.temp_arena.alloc(f(indent)));
                     }
                 }
             }
@@ -239,7 +269,13 @@ where
         self.line_suffixes
             .drain(ls_top..)
             .rev()
-            .for_each(|doc| self.cmds.push(Cmd { indent, mode, doc }));
+            .for_each(|doc| {
+                self.cmds.push(Cmd {
+                    indent,
+                    mode,
+                    kind: CmdKind::Doc(doc),
+                })
+            });
     }
 
     #[cfg_attr(not(feature = "contextual"), allow(unused_variables))]
@@ -254,13 +290,23 @@ where
         // As long as we have either flat‐stack items or break commands to try...
         while cmd_bottom > 0 || !self.fit_docs.is_empty() {
             // Pop the next doc to inspect, or backtrack to bcmds in break mode.
-            let FitCmd { mut mode, mut doc } = self.fit_docs.pop().unwrap_or_else(|| {
-                cmd_bottom -= 1;
-                FitCmd {
-                    mode: Mode::Break,
-                    doc: self.cmds[cmd_bottom].doc,
+            let mut next = self.fit_docs.pop();
+            if next.is_none() {
+                while cmd_bottom > 0 {
+                    cmd_bottom -= 1;
+                    if let CmdKind::Doc(doc) = self.cmds[cmd_bottom].kind {
+                        next = Some(FitCmd {
+                            mode: Mode::Break,
+                            doc,
+                        });
+                        break;
+                    }
                 }
-            });
+                if next.is_none() {
+                    continue;
+                }
+            }
+            let FitCmd { mut mode, mut doc } = next.unwrap();
 
             // Drill into this doc until we either bail or consume a leaf.
             loop {
@@ -301,6 +347,9 @@ where
                             return false;
                         }
                         break;
+                    }
+                    Doc::Tagged(_, ref inner) => {
+                        doc = inner;
                     }
                     Doc::Flatten(ref inner) => {
                         mode = Mode::Flat;
