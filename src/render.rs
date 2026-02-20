@@ -85,5 +85,17 @@ pub trait Render {
         Ok(())
     }
 
+    /// Called when rendering enters a tagged document.
+    #[inline]
+    fn on_tag_enter(&mut self, _id: u32) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    /// Called when rendering exits a tagged document.
+    #[inline]
+    fn on_tag_exit(&mut self, _id: u32) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
     fn fail_doc(&self) -> Self::Error;
 }

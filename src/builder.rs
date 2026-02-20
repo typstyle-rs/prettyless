@@ -134,6 +134,16 @@ where
         }
     }
 
+    /// Attach a transparent tag to this document.
+    #[inline]
+    pub fn tag(self, id: u32) -> Self {
+        let Self(allocator, this) = self;
+        match *this {
+            Doc::Nil => Self(allocator, this),
+            _ => Self(allocator, Doc::Tagged(id, allocator.alloc_cow(this)).into()),
+        }
+    }
+
     /// Acts as `self` when laid out on multiple lines and acts as `that` when laid out on a single line.
     ///
     /// ```

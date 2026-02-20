@@ -154,6 +154,12 @@ pub trait DocAllocator<'a> {
         DocBuilder::from_utf8_text(self, data.into())
     }
 
+    /// Allocate a document and attach a transparent tag to it.
+    #[inline]
+    fn tagged(&'a self, id: u32, doc: impl Pretty<'a, Self>) -> DocBuilder<'a, Self> {
+        doc.pretty(self).tag(id)
+    }
+
     /// Allocate a document containing the given text, which is assumed to be ASCII.
     ///
     /// This can avoid checking for unicode width.

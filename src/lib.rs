@@ -144,6 +144,7 @@
 
 mod alloc;
 mod builder;
+mod debug_tags;
 mod doc;
 mod render;
 pub mod text;
@@ -151,6 +152,7 @@ pub(crate) mod visitor;
 
 pub use alloc::{Arena, BoxAllocator, DocAllocator, RcAllocator};
 pub use builder::DocBuilder;
+pub use debug_tags::{DebugTagRange, debug_with_tag_ranges};
 pub use doc::{BoxDoc, BuildDoc, Doc, DocPtr, RcDoc, RefDoc};
 pub use render::{FmtWrite, IoWrite, Render};
 
