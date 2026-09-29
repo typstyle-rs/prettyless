@@ -8,7 +8,7 @@ where
     W: ?Sized + Render,
 {
     Printer {
-        pos: 0,
+        column: ColumnState::new(0),
         cmds: vec![Cmd {
             indent: 0,
             mode: Mode::Break,
@@ -52,7 +52,7 @@ struct Printer<'d, 'a, T>
 where
     T: DocPtr<'a> + 'a,
 {
-    pos: usize,
+    column: ColumnState,
     cmds: Vec<Cmd<'d, 'a, T>>,
     fit_docs: Vec<FitCmd<'d, 'a, T>>,
     line_suffixes: Vec<&'d Doc<'a, T>>,
@@ -65,6 +65,18 @@ where
 struct PrintState {
     cmd_top: usize,
     line_suffix_top: usize,
+}
+
+/// The printer's current column, shared by rendering and fitting.
+#[derive(Clone, Copy)]
+struct ColumnState {
+    pos: usize,
+}
+
+impl ColumnState {
+    fn new(indent: usize) -> Self {
+        Self { pos: indent }
+    }
 }
 
 impl<'d, 'a, T> Printer<'d, 'a, T>
@@ -94,8 +106,8 @@ where
 
                     Doc::Text(ref s) => {
                         out.write_str_all(s)?;
-                        self.pos += s.len();
-                        fits &= self.pos <= self.width;
+                        self.column.pos += s.len();
+                        fits &= self.column.pos <= self.width;
                         break;
                     }
 
@@ -106,8 +118,8 @@ where
                             _ => unreachable!(),
                         };
                         out.write_str_all(str)?;
-                        self.pos += len;
-                        fits &= self.pos <= self.width;
+                        self.column.pos += len;
+                        fits &= self.column.pos <= self.width;
                         break;
                     }
 
@@ -123,11 +135,11 @@ where
                         // we can
                         if let Some(next) = self.cmds.pop() {
                             write_newline(next.indent, out)?;
-                            self.pos = next.indent;
+                            self.column = ColumnState::new(next.indent);
                             cmd = next;
                         } else {
                             write_newline(indent, out)?;
-                            self.pos = indent;
+                            self.column = ColumnState::new(indent);
                             break;
                         }
                     }
@@ -154,7 +166,7 @@ where
                     }
                     Doc::Align(ref inner) => {
                         // Align to the current position.
-                        cmd.indent = self.pos;
+                        cmd.indent = self.column.pos;
                         cmd.doc = inner;
                     }
 
@@ -170,8 +182,7 @@ where
                         };
                     }
                     Doc::Group(ref inner) => {
-                        if mode == Mode::Break && self.fitting(inner, self.pos, indent, Mode::Flat)
-                        {
+                        if mode == Mode::Break && self.fitting(inner, indent, Mode::Flat) {
                             cmd.mode = Mode::Flat;
                         }
                         cmd.doc = inner;
@@ -183,7 +194,7 @@ where
                         }
 
                         // Try the left branch in a buffer
-                        let save_pos = self.pos;
+                        let save_column = self.column;
                         let save_state = PrintState {
                             cmd_top: self.cmds.len(),
                             line_suffix_top: self.line_suffixes.len(),
@@ -201,14 +212,14 @@ where
                             break;
                         } else {
                             // Revert and try right
-                            self.pos = save_pos;
+                            self.column = save_column;
                             self.cmds.truncate(save_state.cmd_top);
                             self.line_suffixes.truncate(save_state.line_suffix_top);
                             cmd.doc = right;
                         }
                     }
                     Doc::PartialUnion(ref left, ref right) => {
-                        if mode == Mode::Flat || self.fitting(left, self.pos, indent, Mode::Break) {
+                        if mode == Mode::Flat || self.fitting(left, indent, Mode::Break) {
                             cmd.doc = left;
                         } else {
                             cmd.doc = right;
@@ -217,7 +228,7 @@ where
 
                     #[cfg(feature = "contextual")]
                     Doc::OnColumn(ref f) => {
-                        cmd.doc = self.temp_arena.alloc(f(self.pos));
+                        cmd.doc = self.temp_arena.alloc(f(self.column.pos));
                     }
                     #[cfg(feature = "contextual")]
                     Doc::OnNesting(ref f) => {
@@ -243,7 +254,8 @@ where
     }
 
     #[cfg_attr(not(feature = "contextual"), allow(unused_variables))]
-    fn fitting(&mut self, next: &'d Doc<'a, T>, mut pos: usize, indent: usize, mode: Mode) -> bool {
+    fn fitting(&mut self, next: &'d Doc<'a, T>, indent: usize, mode: Mode) -> bool {
+        let mut column = self.column;
         // We start in "flat" mode and may fall back to "break" mode when backtracking.
         let mut cmd_bottom = self.cmds.len();
 
@@ -269,15 +281,15 @@ where
                     Doc::Fail => return false,
 
                     Doc::Text(ref s) => {
-                        pos += s.len();
-                        if pos > self.width {
+                        column.pos += s.len();
+                        if column.pos > self.width {
                             return false;
                         }
                         break;
                     }
                     Doc::TextWithLen(len, _) => {
-                        pos += len;
-                        if pos > self.width {
+                        column.pos += len;
+                        if column.pos > self.width {
                             return false;
                         }
                         break;
@@ -333,7 +345,7 @@ where
 
                     #[cfg(feature = "contextual")]
                     Doc::OnColumn(ref f) => {
-                        doc = self.temp_arena.alloc(f(pos));
+                        doc = self.temp_arena.alloc(f(column.pos));
                     }
                     #[cfg(feature = "contextual")]
                     Doc::OnNesting(ref f) => {
