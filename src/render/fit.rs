@@ -40,12 +40,13 @@ where
     doc: &'d Doc<'a, T>,
 }
 
-struct FitCmd<'d, 'a, T>
-where
-    T: DocPtr<'a> + 'a,
-{
-    mode: Mode,
-    doc: &'d Doc<'a, T>,
+// Commands copy document references without requiring the pointer type to be Clone.
+impl<'a, T: DocPtr<'a> + 'a> Copy for Cmd<'_, 'a, T> {}
+
+impl<'a, T: DocPtr<'a> + 'a> Clone for Cmd<'_, 'a, T> {
+    fn clone(&self) -> Self {
+        *self
+    }
 }
 
 struct Printer<'d, 'a, T>
@@ -54,7 +55,7 @@ where
 {
     column: ColumnState,
     cmds: Vec<Cmd<'d, 'a, T>>,
-    fit_docs: Vec<FitCmd<'d, 'a, T>>,
+    fit_docs: Vec<Cmd<'d, 'a, T>>,
     line_suffixes: Vec<&'d Doc<'a, T>>,
     width: usize,
     #[cfg(feature = "contextual")]
@@ -100,21 +101,21 @@ where
             // Drill down until we hit a leaf or emit something
             loop {
                 let Cmd { indent, mode, doc } = cmd;
-                match *doc {
+                match doc {
                     Doc::Nil => break,
                     Doc::Fail => return Err(out.fail_doc()),
 
-                    Doc::Text(ref s) => {
+                    Doc::Text(s) => {
                         out.write_str_all(s)?;
                         self.column.pos += s.len();
                         fits &= self.column.pos <= self.width;
                         break;
                     }
 
-                    Doc::TextWithLen(len, ref inner) => {
+                    Doc::TextWithLen(len, inner) => {
                         // inner must be a text node
-                        let str = match **inner {
-                            Doc::Text(ref s) => s,
+                        let str = match &**inner {
+                            Doc::Text(s) => s,
                             _ => unreachable!(),
                         };
                         out.write_str_all(str)?;
@@ -144,50 +145,50 @@ where
                         }
                     }
 
-                    Doc::Append(ref left, ref right) => {
+                    Doc::Append(left, right) => {
                         // Push children in reverse so we process ldoc before rdoc
                         cmd.doc = visit_sequence2(left, right, |doc| {
                             self.cmds.push(Cmd { indent, mode, doc })
                         });
                     }
-                    Doc::LineSuffix(ref inner) => {
+                    Doc::LineSuffix(inner) => {
                         self.line_suffixes.push(inner);
                         break;
                     }
 
-                    Doc::Nest(offset, ref inner) => {
-                        cmd.indent = indent.saturating_add_signed(offset);
+                    Doc::Nest(offset, inner) => {
+                        cmd.indent = indent.saturating_add_signed(*offset);
                         cmd.doc = inner;
                     }
-                    Doc::DedentToRoot(ref inner) => {
+                    Doc::DedentToRoot(inner) => {
                         // Dedent to the root level, which is always 0.
                         cmd.indent = 0;
                         cmd.doc = inner;
                     }
-                    Doc::Align(ref inner) => {
+                    Doc::Align(inner) => {
                         // Align to the current position.
                         cmd.indent = self.column.pos;
                         cmd.doc = inner;
                     }
 
                     Doc::ExpandParent => break,
-                    Doc::Flatten(ref inner) => {
+                    Doc::Flatten(inner) => {
                         cmd.mode = Mode::Flat;
                         cmd.doc = inner;
                     }
-                    Doc::BreakOrFlat(ref break_doc, ref flat_doc) => {
+                    Doc::BreakOrFlat(break_doc, flat_doc) => {
                         cmd.doc = match mode {
                             Mode::Break => break_doc,
                             Mode::Flat => flat_doc,
                         };
                     }
-                    Doc::Group(ref inner) => {
+                    Doc::Group(inner) => {
                         if mode == Mode::Break && self.fitting(inner, indent, Mode::Flat) {
                             cmd.mode = Mode::Flat;
                         }
                         cmd.doc = inner;
                     }
-                    Doc::Union(ref left, ref right) => {
+                    Doc::Union(left, right) => {
                         if mode == Mode::Flat {
                             cmd.doc = left;
                             continue;
@@ -218,7 +219,7 @@ where
                             cmd.doc = right;
                         }
                     }
-                    Doc::PartialUnion(ref left, ref right) => {
+                    Doc::PartialUnion(left, right) => {
                         if mode == Mode::Flat || self.fitting(left, indent, Mode::Break) {
                             cmd.doc = left;
                         } else {
@@ -227,11 +228,11 @@ where
                     }
 
                     #[cfg(feature = "contextual")]
-                    Doc::OnColumn(ref f) => {
+                    Doc::OnColumn(f) => {
                         cmd.doc = self.temp_arena.alloc(f(self.column.pos));
                     }
                     #[cfg(feature = "contextual")]
-                    Doc::OnNesting(ref f) => {
+                    Doc::OnNesting(f) => {
                         cmd.doc = self.temp_arena.alloc(f(indent));
                     }
                 }
@@ -253,7 +254,6 @@ where
             .for_each(|doc| self.cmds.push(Cmd { indent, mode, doc }));
     }
 
-    #[cfg_attr(not(feature = "contextual"), allow(unused_variables))]
     fn fitting(&mut self, next: &'d Doc<'a, T>, indent: usize, mode: Mode) -> bool {
         let mut column = self.column;
         // We start in "flat" mode and may fall back to "break" mode when backtracking.
@@ -261,26 +261,31 @@ where
 
         // fit_docs is our work‐stack for documents to check in flat mode.
         self.fit_docs.clear();
-        self.fit_docs.push(FitCmd { mode, doc: next });
+        self.fit_docs.push(Cmd {
+            indent,
+            mode,
+            doc: next,
+        });
 
         // As long as we have either flat‐stack items or break commands to try...
         while cmd_bottom > 0 || !self.fit_docs.is_empty() {
             // Pop the next doc to inspect, or backtrack to bcmds in break mode.
-            let FitCmd { mut mode, mut doc } = self.fit_docs.pop().unwrap_or_else(|| {
+            let mut cmd = self.fit_docs.pop().unwrap_or_else(|| {
                 cmd_bottom -= 1;
-                FitCmd {
+                Cmd {
                     mode: Mode::Break,
-                    doc: self.cmds[cmd_bottom].doc,
+                    ..self.cmds[cmd_bottom]
                 }
             });
 
             // Drill into this doc until we either bail or consume a leaf.
             loop {
-                match *doc {
+                let Cmd { mode, doc, .. } = cmd;
+                match doc {
                     Doc::Nil => break,
                     Doc::Fail => return false,
 
-                    Doc::Text(ref s) => {
+                    Doc::Text(s) => {
                         column.pos += s.len();
                         if column.pos > self.width {
                             return false;
@@ -300,10 +305,10 @@ where
                         return mode == Mode::Break;
                     }
 
-                    Doc::Append(ref left, ref right) => {
+                    Doc::Append(left, right) => {
                         // Push r then l so we process l first.
-                        doc = visit_sequence2(left, right, |doc| {
-                            self.fit_docs.push(FitCmd { mode, doc })
+                        cmd.doc = visit_sequence2(left, right, |doc| {
+                            self.fit_docs.push(Cmd { indent, mode, doc })
                         });
                     }
                     Doc::LineSuffix(_) => break, // Line suffixes don't affect fitting, skip them entirely
@@ -314,42 +319,40 @@ where
                         }
                         break;
                     }
-                    Doc::Flatten(ref inner) => {
-                        mode = Mode::Flat;
-                        doc = inner;
+                    Doc::Flatten(inner) => {
+                        cmd.mode = Mode::Flat;
+                        cmd.doc = inner;
                     }
-                    Doc::BreakOrFlat(ref break_doc, ref flat_doc) => {
+                    Doc::BreakOrFlat(break_doc, flat_doc) => {
                         // Select branch based on current mode.
-                        doc = if mode == Mode::Break {
+                        cmd.doc = if mode == Mode::Break {
                             break_doc
                         } else {
                             flat_doc
                         };
                     }
 
-                    Doc::Union(ref inner, _) | Doc::PartialUnion(ref inner, _)
-                        if mode == Mode::Flat =>
-                    {
+                    Doc::Union(inner, _) | Doc::PartialUnion(inner, _) if mode == Mode::Flat => {
                         // In flat mode we only consider the first branch.
-                        doc = inner;
+                        cmd.doc = inner;
                     }
 
-                    Doc::Nest(_, ref inner)
-                    | Doc::DedentToRoot(ref inner)
-                    | Doc::Align(ref inner)
-                    | Doc::Group(ref inner)
-                    | Doc::Union(_, ref inner)
-                    | Doc::PartialUnion(_, ref inner) => {
-                        doc = inner;
+                    Doc::Nest(_, inner)
+                    | Doc::DedentToRoot(inner)
+                    | Doc::Align(inner)
+                    | Doc::Group(inner)
+                    | Doc::Union(_, inner)
+                    | Doc::PartialUnion(_, inner) => {
+                        cmd.doc = inner;
                     }
 
                     #[cfg(feature = "contextual")]
-                    Doc::OnColumn(ref f) => {
-                        doc = self.temp_arena.alloc(f(column.pos));
+                    Doc::OnColumn(f) => {
+                        cmd.doc = self.temp_arena.alloc(f(column.pos));
                     }
                     #[cfg(feature = "contextual")]
-                    Doc::OnNesting(ref f) => {
-                        doc = self.temp_arena.alloc(f(indent));
+                    Doc::OnNesting(f) => {
+                        cmd.doc = self.temp_arena.alloc(f(indent));
                     }
                 }
             }
