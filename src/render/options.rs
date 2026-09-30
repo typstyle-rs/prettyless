@@ -24,15 +24,19 @@ pub struct RenderOptions {
     pub width: usize,
     /// The terminator emitted for structural breaks.
     pub line_ending: LineEnding,
+    /// When a structural break writes its indentation.
+    pub indentation_policy: IndentationPolicy,
 }
 
 impl RenderOptions {
-    /// Creates options with a target line width of `width` and [`LineEnding::Lf`] breaks.
+    /// Creates options with a target line width of `width`, [`LineEnding::Lf`] breaks,
+    /// and [`IndentationPolicy::Eager`] indentation.
     #[inline]
     pub const fn new(width: usize) -> Self {
         Self {
             width,
             line_ending: LineEnding::Lf,
+            indentation_policy: IndentationPolicy::Eager,
         }
     }
 
@@ -47,6 +51,13 @@ impl RenderOptions {
     #[inline]
     pub const fn with_line_ending(mut self, ending: LineEnding) -> Self {
         self.line_ending = ending;
+        self
+    }
+
+    /// Sets when a structural break writes its indentation.
+    #[inline]
+    pub const fn with_indentation_policy(mut self, policy: IndentationPolicy) -> Self {
+        self.indentation_policy = policy;
         self
     }
 }
@@ -76,4 +87,26 @@ impl LineEnding {
             LineEnding::Crlf => "\r\n",
         }
     }
+}
+
+/// When a structural break writes its indentation.
+///
+/// Selected through [`RenderOptions`]. The policy changes only *when* the
+/// indentation of a break is written; the break itself, the indentation it
+/// selects, blank-line counts, fitting, and contextual columns are unaffected.
+/// [`IndentationPolicy::Eager`] is the default.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum IndentationPolicy {
+    /// Writes a break's indentation immediately after its terminator.
+    ///
+    /// Blank lines and a trailing break therefore carry trailing spaces. This is
+    /// the behavior of upstream `pretty` and the default.
+    #[default]
+    Eager,
+    /// Postpones a break's indentation until content on the new line commits it.
+    ///
+    /// Blank lines and a trailing break emit no indentation. Nonempty text and a
+    /// line suffix commit pending indentation; empty text does not. A later break
+    /// replaces pending indentation and the end of output discards it.
+    Deferred,
 }

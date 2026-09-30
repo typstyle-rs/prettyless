@@ -1,8 +1,8 @@
 use crate::{Doc, DocPtr, Render, visitor::visit_sequence_rev};
 
 use super::{
-    RenderOptions,
-    write::{BufferWrite, write_newline},
+    IndentationPolicy, RenderOptions,
+    write::{BufferWrite, write_spaces},
 };
 
 pub fn print_doc<'a, W, T>(
@@ -85,11 +85,76 @@ struct PrintState {
 #[derive(Clone, Copy)]
 struct ColumnState {
     pos: usize,
+    // Generated indentation is deferred until content commits it under
+    // `IndentationPolicy::Deferred`; under `Eager` it is written by the break and
+    // this stays zero.
+    pending_indent: usize,
+    pending_padding: usize,
+    // Pending indentation alone is not content, so weak whitespace can disappear
+    // on an otherwise empty line.
+    fresh: bool,
 }
 
 impl ColumnState {
     fn new(indent: usize) -> Self {
-        Self { pos: indent }
+        Self {
+            pos: 0,
+            pending_indent: indent,
+            pending_padding: 0,
+            fresh: true,
+        }
+    }
+
+    fn is_fresh(self) -> bool {
+        self.fresh
+    }
+
+    fn within(self, width: usize) -> bool {
+        self.pos <= width
+    }
+
+    fn fits_suffix_padding(self, width: usize, has_suffix: bool) -> bool {
+        // Trailing weak spaces disappear unless a suffix commits them. Count
+        // that padding consistently in rendering and fitting, excluding suffix text.
+        !has_suffix || self.pending_padding == 0 || self.prospective_column() <= width
+    }
+
+    fn prospective_column(self) -> usize {
+        // Callbacks and alignment see where the next text would start. Observing
+        // this column must not emit padding that might be discarded at a break.
+        self.pos
+            .saturating_add(self.pending_indent)
+            .saturating_add(self.pending_padding)
+    }
+
+    fn weak_space(&mut self) {
+        if !self.is_fresh() {
+            self.pending_padding = self.pending_padding.saturating_add(1);
+        }
+    }
+
+    fn commit_indent(&mut self) -> usize {
+        let indent = std::mem::take(&mut self.pending_indent);
+        self.pos = self.pos.saturating_add(indent);
+        indent
+    }
+
+    // Empty text leaves indentation, padding, and line freshness unchanged. Zero
+    // display width does not imply empty text (a combining mark commits padding).
+    fn commit_text(&mut self, text: &str, width: usize) -> Option<usize> {
+        if text.is_empty() {
+            return None;
+        }
+        Some(self.commit_content(width))
+    }
+
+    // A suffix is treated as content without inspecting the document it contains.
+    fn commit_content(&mut self, width: usize) -> usize {
+        let indent = self.commit_indent();
+        let padding = std::mem::take(&mut self.pending_padding);
+        self.pos = self.pos.saturating_add(padding).saturating_add(width);
+        self.fresh = false;
+        indent.saturating_add(padding)
     }
 }
 
@@ -118,10 +183,12 @@ where
                     Doc::Nil => break,
                     Doc::Fail => return Err(out.fail_doc()),
 
+                    Doc::WeakSpace => {
+                        self.column.weak_space();
+                        break;
+                    }
                     Doc::Text(s) => {
-                        out.write_str_all(s)?;
-                        self.column.pos += s.len();
-                        fits &= self.column.pos <= self.options.width;
+                        fits &= self.write_str(out, s, s.len())?;
                         break;
                     }
 
@@ -131,26 +198,27 @@ where
                             Doc::Text(s) => s,
                             _ => unreachable!(),
                         };
-                        out.write_str_all(str)?;
-                        self.column.pos += len;
-                        fits &= self.column.pos <= self.options.width;
+                        fits &= self.write_str(out, str, *len)?;
                         break;
                     }
 
-                    Doc::HardLine => {
+                    Doc::HardLine | Doc::WeakLine => {
                         // A break ends the shared line, including suffixes queued
                         // by the caller before entering this speculative branch.
                         if self.suffix_start < self.line_suffixes.len() {
+                            fits &= self.write_suffix_padding(out)?;
                             self.cmds.push(cmd);
                             self.push_line_suffixes(mode, indent);
                             break;
                         }
 
+                        if matches!(doc, Doc::WeakLine) && self.column.is_fresh() {
+                            break;
+                        }
                         // Borrow the continuation's indentation without consuming
                         // it: a union buffer must stop at its saved command boundary.
                         let next_indent = self.cmds.last().map_or(indent, |next| next.indent);
-                        write_newline(next_indent, self.options.line_ending, out)?;
-                        self.column = ColumnState::new(next_indent);
+                        self.write_newline(out, next_indent)?;
                         break;
                     }
 
@@ -176,7 +244,7 @@ where
                     }
                     Doc::Align(inner) => {
                         // Align to the current position.
-                        cmd.indent = self.column.pos;
+                        cmd.indent = self.column.prospective_column();
                         cmd.doc = inner;
                     }
 
@@ -249,7 +317,7 @@ where
 
                     #[cfg(feature = "contextual")]
                     Doc::OnColumn(f) => {
-                        cmd.doc = self.temp_arena.alloc(f(self.column.pos));
+                        cmd.doc = self.temp_arena.alloc(f(self.column.prospective_column()));
                     }
                     #[cfg(feature = "contextual")]
                     Doc::OnNesting(f) => {
@@ -264,11 +332,18 @@ where
                 && self.cmds.len() == top
                 && self.suffix_start < self.line_suffixes.len()
             {
+                fits &= self.write_suffix_padding(out)?;
                 self.push_line_suffixes(Mode::Break, 0);
             }
         }
 
-        Ok(fits)
+        // Deferred suffix text is excluded from fitting, but the weak spaces it
+        // commits still belong to the branch's ordinary layout.
+        Ok(fits
+            && self.column.fits_suffix_padding(
+                self.options.width,
+                self.suffix_start < self.line_suffixes.len(),
+            ))
     }
 
     fn push_line_suffixes(&mut self, mode: Mode, indent: usize) {
@@ -291,8 +366,51 @@ where
         }
     }
 
+    fn write_str<W>(&mut self, out: &mut W, s: &str, len: usize) -> Result<bool, W::Error>
+    where
+        W: ?Sized + Render,
+    {
+        let Some(spaces) = self.column.commit_text(s, len) else {
+            return Ok(true);
+        };
+        write_spaces(spaces, out)?;
+        out.write_str_all(s)?;
+        Ok(self.column.within(self.options.width))
+    }
+
+    fn write_suffix_padding<W>(&mut self, out: &mut W) -> Result<bool, W::Error>
+    where
+        W: ?Sized + Render,
+    {
+        // Treat the queued suffix as content before evaluating its document.
+        // Empty suffixes deliberately commit spaces too; no suffix inspection
+        // or speculative callback evaluation is needed to predict weak behavior.
+        let fits = self.column.fits_suffix_padding(self.options.width, true);
+        write_spaces(self.column.commit_content(0), out)?;
+        Ok(fits)
+    }
+
+    fn write_newline<W>(&mut self, out: &mut W, indent: usize) -> Result<(), W::Error>
+    where
+        W: ?Sized + Render,
+    {
+        out.write_str_all(self.options.line_ending.as_str())?;
+        self.column = ColumnState::new(indent);
+        if self.options.indentation_policy == IndentationPolicy::Eager {
+            // Eager indentation follows the terminator immediately, so blank and
+            // terminal lines carry trailing spaces. Indentation is not content, so
+            // the new line stays fresh for weak whitespace.
+            write_spaces(self.column.commit_indent(), out)?;
+        }
+        Ok(())
+    }
+
     fn fitting(&mut self, next: &'d Doc<'a, T>, indent: usize, mode: Mode) -> bool {
         let mut column = self.column;
+        // Only suffix presence matters: its body and width are excluded from
+        // fitting. Presence commits weak padding and prevents a fresh weak line
+        // from being suppressed, matching the eventual flush.
+        let mut has_suffix = self.suffix_start < self.line_suffixes.len();
         // We start in "flat" mode and may fall back to "break" mode when backtracking.
         let mut cmd_bottom = self.cmds.len();
 
@@ -324,24 +442,37 @@ where
                     Doc::Nil => break,
                     Doc::Fail => return false,
 
+                    Doc::WeakSpace => {
+                        column.weak_space();
+                        break;
+                    }
                     Doc::Text(s) => {
-                        column.pos += s.len();
-                        if column.pos > self.options.width {
+                        if column.commit_text(s, s.len()).is_some()
+                            && !column.within(self.options.width)
+                        {
                             return false;
                         }
                         break;
                     }
-                    Doc::TextWithLen(len, _) => {
-                        column.pos += len;
-                        if column.pos > self.options.width {
+                    Doc::TextWithLen(len, inner) => {
+                        let text = match &**inner {
+                            Doc::Text(s) => s,
+                            _ => unreachable!(),
+                        };
+                        if column.commit_text(text, *len).is_some()
+                            && !column.within(self.options.width)
+                        {
                             return false;
                         }
                         break;
                     }
 
-                    Doc::HardLine => {
-                        // A hard_line only “fits” in break mode.
-                        return mode == Mode::Break;
+                    // A suppressed break cannot end the fit check: following
+                    // text remains on this line and may still exceed the width.
+                    Doc::WeakLine if column.is_fresh() && !has_suffix => break,
+                    Doc::HardLine | Doc::WeakLine => {
+                        return mode == Mode::Break
+                            && column.fits_suffix_padding(self.options.width, has_suffix);
                     }
 
                     Doc::Append(left, right) => {
@@ -350,7 +481,10 @@ where
                             self.fit_docs.push(Cmd { indent, mode, doc })
                         });
                     }
-                    Doc::LineSuffix(_) => break, // Line suffixes don't affect fitting, skip them entirely
+                    Doc::LineSuffix(_) => {
+                        has_suffix = true;
+                        break;
+                    }
 
                     Doc::ExpandParent => {
                         if mode == Mode::Flat {
@@ -387,7 +521,7 @@ where
                         cmd.doc = inner;
                     }
                     Doc::Align(inner) => {
-                        cmd.indent = column.pos;
+                        cmd.indent = column.prospective_column();
                         cmd.doc = inner;
                     }
                     Doc::Group(inner) | Doc::Union(_, inner) | Doc::PartialUnion(_, inner) => {
@@ -396,7 +530,7 @@ where
 
                     #[cfg(feature = "contextual")]
                     Doc::OnColumn(f) => {
-                        cmd.doc = self.temp_arena.alloc(f(column.pos));
+                        cmd.doc = self.temp_arena.alloc(f(column.prospective_column()));
                     }
                     #[cfg(feature = "contextual")]
                     Doc::OnNesting(f) => {
@@ -406,8 +540,7 @@ where
             }
         }
 
-        // If we've exhausted both fcmds and break_idx, everything fit.
-        true
+        column.fits_suffix_padding(self.options.width, has_suffix)
     }
 }
 

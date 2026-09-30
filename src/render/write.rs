@@ -2,7 +2,7 @@ use std::{fmt, io};
 
 use crate::text::SPACES;
 
-use super::{LineEnding, Render};
+use super::Render;
 
 /// Writes to something implementing `std::io::Write`
 pub struct IoWrite<W> {
@@ -100,26 +100,14 @@ impl Render for BufferWrite {
     fn fail_doc(&self) -> Self::Error {}
 }
 
-pub(super) fn write_newline<W>(
-    ind: usize,
-    line_ending: LineEnding,
-    out: &mut W,
-) -> Result<(), W::Error>
-where
-    W: ?Sized + Render,
-{
-    out.write_str_all(line_ending.as_str())?;
-    write_spaces(ind, out)
-}
-
 pub(super) fn write_spaces<W>(spaces: usize, out: &mut W) -> Result<(), W::Error>
 where
     W: ?Sized + Render,
 {
-    let mut inserted = 0;
-    while inserted < spaces {
-        let insert = SPACES.len().min(spaces - inserted);
-        inserted += out.write_str(&SPACES[..insert])?;
+    let mut remaining = spaces;
+    while remaining > 0 {
+        let insert = SPACES.len().min(remaining);
+        remaining -= out.write_str(&SPACES[..insert])?;
     }
 
     Ok(())

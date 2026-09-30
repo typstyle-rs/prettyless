@@ -386,6 +386,8 @@ fn union_branches_leave_the_continuation_to_the_caller() {
         + a.text("b"))
     .nest(2);
     assert_eq!(doc.print(1).to_string(), "a\n  b");
+    let doc = (a.text("a") + a.weak_space()).union(a.text("x")) + a.hard_line();
+    assert_eq!(doc.print(1).to_string(), "a\n");
 }
 
 #[test]

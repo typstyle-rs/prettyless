@@ -65,6 +65,12 @@ pub trait DocAllocator<'a> {
         self.ascii_text(" ")
     }
 
+    /// Allocate a deferred space; see [`Doc::WeakSpace`].
+    #[inline]
+    fn weak_space(&'a self) -> DocBuilder<'a, Self> {
+        DocBuilder(self, Doc::WeakSpace.into())
+    }
+
     /// A line acts like a `\n` but behaves like `space` if it is grouped on a single line.
     #[inline]
     fn line(&'a self) -> DocBuilder<'a, Self> {
@@ -106,6 +112,27 @@ pub trait DocAllocator<'a> {
     #[inline]
     fn softline_(&'a self) -> DocBuilder<'a, Self> {
         self.line_().group()
+    }
+
+    /// A line break suppressed on an empty line, with no flat alternative.
+    /// See [`Doc::WeakLine`] for suffix handling.
+    ///
+    /// Use [`DocBuilder::flat_alt`] to supply a flat alternative explicitly.
+    ///
+    /// ```
+    /// use prettyless::{Arena, DocAllocator};
+    /// let a = Arena::new();
+    /// let doc = (a.text("a") + a.weak_line() + a.text("b")).group();
+    /// assert_eq!(doc.print(80).to_string(), "a\nb");
+    /// let doc = (a.text("a") + a.weak_line().flat_alt(a.space()) + a.text("b")).group();
+    /// assert_eq!(doc.print(3).to_string(), "a b");
+    /// assert_eq!(doc.print(2).to_string(), "a\nb");
+    /// let doc = (a.text("a") + a.weak_line().flat_alt(a.nil()) + a.text("b")).group();
+    /// assert_eq!(doc.print(2).to_string(), "ab");
+    /// ```
+    #[inline]
+    fn weak_line(&'a self) -> DocBuilder<'a, Self> {
+        DocBuilder(self, Doc::WeakLine.into())
     }
 
     /// Equivalent to `self.nil().flat_alt(doc.pretty(self))`
@@ -187,6 +214,14 @@ pub trait DocAllocator<'a> {
     ///
     /// Multiple `line_suffix` calls accumulate in order and are all flushed together when a line
     /// break occurs or rendering ends.
+    ///
+    /// Weak whitespace treats a pending suffix as content without inspecting
+    /// its document. Flushing it commits pending weak spaces, even if it is
+    /// empty, so trailing spaces are allowed. Its width remains excluded from
+    /// group and partial-union fitting. See [`Doc::WeakSpace`] and [`Doc::WeakLine`].
+    /// When combined with weak whitespace, the suffix must not emit line breaks,
+    /// including through contextual callbacks. Multiline suffixes are outside
+    /// that contract because fitting does not evaluate the suffix document.
     ///
     /// ```
     /// use prettyless::{Arena, DocAllocator};
@@ -406,7 +441,9 @@ impl<'a> DocAllocator<'a> for Arena<'a> {
         RefDoc(match doc {
             // Return 'static references for common variants to avoid some allocations
             Doc::Nil => &Doc::Nil,
+            Doc::WeakSpace => &Doc::WeakSpace,
             Doc::HardLine => &Doc::HardLine,
+            Doc::WeakLine => &Doc::WeakLine,
             Doc::Fail => &Doc::Fail,
             // line()
             Doc::BreakOrFlat(RefDoc(Doc::HardLine), RefDoc(Doc::Text(Text::Borrowed(" ")))) => {
