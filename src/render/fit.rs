@@ -1,8 +1,15 @@
 use crate::{Doc, DocPtr, Render, visitor::visit_sequence_rev};
 
-use super::write::{BufferWrite, write_newline};
+use super::{
+    RenderOptions,
+    write::{BufferWrite, write_newline},
+};
 
-pub fn print_doc<'a, W, T>(doc: &Doc<'a, T>, width: usize, out: &mut W) -> Result<(), W::Error>
+pub fn print_doc<'a, W, T>(
+    doc: &Doc<'a, T>,
+    options: RenderOptions,
+    out: &mut W,
+) -> Result<(), W::Error>
 where
     T: DocPtr<'a> + 'a,
     W: ?Sized + Render,
@@ -18,7 +25,7 @@ where
         line_suffixes: vec![],
         suffix_start: 0,
         union_depth: 0,
-        width,
+        width: options.width(),
         #[cfg(feature = "contextual")]
         temp_arena: &typed_arena::Arena::new(),
     }
