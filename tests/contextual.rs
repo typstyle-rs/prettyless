@@ -101,6 +101,49 @@ fn union() {
 }
 
 #[test]
+fn union_suffixes_use_outer_column_at_flush() {
+    let a = Arena::new();
+    let suffix = a.on_column(|column| {
+        if column == 2 {
+            a.text("long").into_doc()
+        } else {
+            a.nil().into_doc()
+        }
+    });
+    let doc = a.line_suffix("O") + (a.text("a") + a.line_suffix(suffix)).union(a.text("x"));
+    assert_eq!(doc.print(2).to_string(), "aOlong");
+    assert_eq!(doc.print(6).to_string(), "aOlong");
+}
+
+#[test]
+fn union_suffixes_use_the_actual_flush_column() {
+    let a = Arena::new();
+    let suffix = a.on_column(|column| {
+        if column == 2 {
+            a.text("S").into_doc()
+        } else {
+            a.fail().into_doc()
+        }
+    });
+    let doc = (a.text("a") + a.line_suffix(suffix)).union(a.text("x")) + a.text("b");
+    assert_eq!(doc.print(80).to_string(), "abS");
+}
+
+#[test]
+fn union_suffixes_do_not_limit_caller_text_width() {
+    let a = Arena::new();
+    let suffix = a.on_column(|column| {
+        if column == 5 {
+            a.hard_line().into_doc()
+        } else {
+            a.fail().into_doc()
+        }
+    });
+    let doc = (a.text("a") + a.line_suffix(suffix)).union(a.text("x")) + a.text("long");
+    assert_eq!(doc.print(1).to_string(), "along\n");
+}
+
+#[test]
 fn fitting_tracks_each_commands_nesting() {
     let a = Arena::new();
     let nested = a

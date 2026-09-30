@@ -32,3 +32,7 @@ name = "trees"
 [[bench]]
 name = "trees"
 harness = false
+
+[[bench]]
+name = "line_suffixes"
+harness = false

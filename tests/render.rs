@@ -352,3 +352,60 @@ fn pretty_cow() {
 
     test_snapshot!(8, doc, @"abc 123");
 }
+
+#[test]
+fn successful_union_defers_suffixes_in_order_until_the_callers_line_ends() {
+    let a = Arena::new();
+    let doc = a.line_suffix("outer") + (a.text("a") + a.line_suffix("inner")).union(a.text("x"));
+    assert_eq!(doc.print(80).to_string(), "aouterinner");
+    assert_eq!((doc + a.text("b")).print(80).to_string(), "abouterinner");
+
+    // The caller's text precedes the suffix even when the line exceeds width.
+    let doc = (a.text("a") + a.line_suffix("long")).union(a.text("x")) + a.text("b");
+    assert_eq!(doc.print(1).to_string(), "ablong");
+}
+
+#[test]
+fn deferred_suffix_failure_does_not_fall_back_to_another_union_branch() {
+    let a = Arena::new();
+    let doc = (a.text("a") + a.line_suffix(a.fail())).union(a.text("x")) + a.text("b");
+    let mut out = String::new();
+    assert!(doc.render_fmt(2, &mut out).is_err());
+    assert_eq!(out, "ab");
+}
+
+#[test]
+fn union_branches_leave_the_continuation_to_the_caller() {
+    let a = Arena::new();
+    let doc = ((a.text("a") + a.hard_line()).union(a.text("x")) + a.text("b")).nest(2);
+    // The caller's over-width text must not reject a branch which already fits.
+    assert_eq!(doc.print(1).to_string(), "a\n  b");
+
+    let doc = ((a.text("long") + a.hard_line())
+        .union((a.text("a") + a.hard_line()).union(a.text("x")))
+        + a.text("b"))
+    .nest(2);
+    assert_eq!(doc.print(1).to_string(), "a\n  b");
+}
+
+#[test]
+fn successful_union_breaks_flush_outer_suffixes() {
+    let a = Arena::new();
+    let doc = a.text("a")
+        + a.line_suffix("//outer")
+        + (a.text("b") + a.hard_line()).union(a.text("x"))
+        + a.text("c");
+    assert_eq!(doc.print(80).to_string(), "ab//outer\nc");
+}
+
+#[test]
+fn union_rollback_restores_suffixes_after_nested_breaks() {
+    let a = Arena::new();
+    for end in [a.fail(), a.text("toolong")] {
+        let inner = (a.line_suffix("I") + a.hard_line() + a.text("ok")).union(a.text("r"));
+        let left = inner + a.line_suffix("J") + a.hard_line() + end;
+        let doc = a.text("p") + a.line_suffix("O") + left.union(a.text("x"));
+        assert_eq!(doc.print(4).to_string(), "pxO");
+        assert_eq!((doc + a.text("y")).print(4).to_string(), "pxyO");
+    }
+}
