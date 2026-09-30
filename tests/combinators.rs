@@ -30,6 +30,24 @@ fn spaces_token_emits_spaces() {
 }
 
 #[test]
+fn weak_tokens_defer_whitespace() {
+    // A weak line breaks even inside a group that would fit, and has no flat alternative.
+    assert_print!(group(("a", weak_line(), "b")), "a\nb");
+    assert_print!(1, group((weak_line(), "long")), "long");
+
+    // An explicit flat alternative makes it choose a space when the group fits, or nothing.
+    assert_print!(3, group(("a", flat_alt(weak_line(), space()), "b")), "a b");
+    assert_print!(2, group(("a", flat_alt(weak_line(), space()), "b")), "a\nb");
+    assert_print!(2, group(("a", flat_alt(weak_line(), nil()), "b")), "ab");
+    assert_print!(1, group(("a", flat_alt(weak_line(), nil()), "b")), "a\nb");
+
+    // Weak spaces vanish at line boundaries and accumulate between text.
+    assert_print!((weak_space(), "a"), "a");
+    assert_print!(("a", weak_space(), weak_space(), "b"), "a  b");
+    assert_print!(("a", weak_space()), "a");
+}
+
+#[test]
 fn as_string_renders_display_values() {
     assert_print!(("x = ", as_string(42)), "x = 42");
 }

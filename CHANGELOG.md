@@ -4,12 +4,15 @@
 
 ### Added
 
-- `combinators` module: allocator-free combinators implementing `Pretty`. `nil`, `fail`, `hard_line`, `line_or_nil`, `line_or_space`, `soft_line_or_nil`, `soft_line_or_space`, `space`, `spaces`, `as_string`, `expand_parent`, `line_suffix`, `nest`/`indent`/`dedent`, `group`, `align`, `dedent_to_root`, `flatten`, `union`, `partial_union`, `flat_alt`, `concat`, `intersperse`, `repeat`, and (under `contextual`) `on_column`/`on_nesting`.
+- `Doc::WeakSpace` and `Doc::WeakLine` weak whitespace primitives: a weak space is omitted at the start of a line and dropped at its end unless a line suffix commits it, and a weak line is a break skipped when its line has no nonempty text, with no flat alternative of its own (`flat_alt` supplies one). Constructors: `DocAllocator::weak_space`/`weak_line`, the `weak_line`/`weak_space` statics of `Doc`, `BuildDoc`, `BoxDoc` and `RcDoc`, and the `weak_space`/`weak_line` combinators.
+- `IndentationPolicy`, which controls when a break writes its indentation, selected through the new `RenderOptions::indentation_policy` field or `RenderOptions::with_indentation_policy`.
+- `combinators` module: allocator-free combinators implementing `Pretty`. `nil`, `fail`, `hard_line`, `line_or_nil`, `line_or_space`, `soft_line_or_nil`, `soft_line_or_space`, `space`, `spaces`, `weak_space`, `weak_line`, `as_string`, `expand_parent`, `line_suffix`, `nest`/`indent`/`dedent`, `group`, `align`, `dedent_to_root`, `flatten`, `union`, `partial_union`, `flat_alt`, `concat`, `intersperse`, `repeat`, and (under `contextual`) `on_column`/`on_nesting`.
 - `prelude` re-exports the combinators.
 - `intersperse(separator)(docs)` and `repeat(times)(doc)` are curried like `nest(offset)(doc)`; the returned function clones the separator, so it can be applied repeatedly.
 
 ### Changed
 
+- **Behavior:** a break's indentation is written according to `RenderOptions::indentation_policy`. `Eager`, the default, keeps the previous output; `Deferred` omits the indentation of blank lines and of a trailing break, leaving it to be committed by the next nonempty text or a line suffix.
 - **Behavior:** `DocBuilder::indent`/`dedent` and `combinators::indent`/`dedent` panic on offsets above `isize::MAX` instead of silently reinterpreting them as negative offsets.
 
 ## v0.3.0 (2025-07-17)

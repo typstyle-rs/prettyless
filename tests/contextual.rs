@@ -200,3 +200,127 @@ fn fitting_tracks_alignment_for_nesting_callbacks() {
     assert_eq!(doc.print(5).to_string(), "abc d");
     assert_eq!(doc.print(4).to_string(), "abc\n  d");
 }
+
+#[test]
+fn column_callbacks_include_pending_indentation_in_fitting_and_rendering() {
+    let a = Arena::new();
+    let doc = (a.hard_line()
+        + (a.on_column(|c| {
+            if c == 2 {
+                a.text("ab").into_doc()
+            } else {
+                a.fail().into_doc()
+            }
+        }) + a.line()
+            + a.text("x"))
+        .group())
+    .nest(2);
+
+    assert_eq!(doc.print(6).to_string(), "\n  ab x");
+    assert_eq!(doc.print(5).to_string(), "\n  ab\n  x");
+
+    let doc = (a.hard_line()
+        + a.text("ab")
+            .measure_width(|width| a.as_string(width).into_doc()))
+    .nest(2);
+    assert_eq!(doc.print(5).to_string(), "\n  ab2");
+}
+
+#[test]
+fn column_callbacks_observe_padding_without_committing_it() {
+    let a = Arena::new();
+    let doc = (a.text("a")
+        + a.line()
+        + a.text("b")
+        + a.weak_space()
+        + a.on_column(|c| {
+            if c == 4 || c == 2 {
+                a.ascii_text("").into_doc()
+            } else {
+                a.fail().into_doc()
+            }
+        }))
+    .group();
+    assert_eq!(doc.print(3).to_string(), "a b");
+    assert_eq!(doc.print(2).to_string(), "a\nb");
+
+    let doc = a.text("a") + a.weak_space() + a.on_column(|c| a.as_string(c).into_doc());
+    assert_eq!(doc.print(3).to_string(), "a 2");
+}
+
+#[test]
+fn alignment_and_dedentation_preserve_prospective_columns() {
+    let a = Arena::new();
+    let doc = (a.text("a")
+        + a.weak_space()
+        + (a.on_nesting(|n| {
+            if n == 2 {
+                a.text("b").into_doc()
+            } else {
+                a.fail().into_doc()
+            }
+        }) + a.line()
+            + a.text("c"))
+        .align())
+    .group();
+    assert_eq!(doc.print(5).to_string(), "a b c");
+    assert_eq!(doc.print(4).to_string(), "a b\n  c");
+
+    let doc = (a.hard_line()
+        + (a.on_column(|c| a.as_string(c).into_doc()) + a.hard_line() + a.text("x")).align())
+    .nest(2);
+    assert_eq!(doc.print(3).to_string(), "\n  2\n  x");
+
+    for to_root in [false, true] {
+        let body = a.on_column(|c| a.as_string(c).into_doc()) + a.hard_line() + a.text("x");
+        let body = if to_root {
+            body.dedent_to_root()
+        } else {
+            body.dedent(2)
+        };
+        let doc = (a.hard_line() + body).nest(2);
+        assert_eq!(doc.print(3).to_string(), "\n  2\nx");
+    }
+}
+
+#[test]
+fn indentation_policy_preserves_prospective_columns() {
+    let a = Arena::new();
+    let deferred = RenderOptions::new(4).with_indentation_policy(IndentationPolicy::Deferred);
+    let doc = (a.hard_line()
+        + (a.on_column(|c| a.as_string(c).into_doc()) + a.hard_line() + a.text("x")).align())
+    .nest(2);
+
+    assert_eq!(doc.print(4).to_string(), "\n  2\n  x");
+    assert_eq!(doc.print_with(deferred).to_string(), "\n  2\n  x");
+}
+
+#[test]
+fn same_line_suffix_callbacks_commit_padding_without_speculative_evaluation() {
+    for empty in [false, true] {
+        for width in [3, 4] {
+            let calls = std::cell::Cell::new(0);
+            let a = Arena::new();
+            let suffix = a.on_column(|column| {
+                calls.set(calls.get() + 1);
+                assert_eq!(column, if width == 4 { 4 } else { 2 });
+                if empty {
+                    a.nil().into_doc()
+                } else {
+                    a.text("//").into_doc()
+                }
+            });
+            let doc =
+                (a.text("a") + a.line() + a.text("b") + a.weak_space() + a.line_suffix(suffix))
+                    .group();
+            let expected = match (width, empty) {
+                (4, false) => "a b //",
+                (4, true) => "a b ",
+                (_, false) => "a\nb //",
+                (_, true) => "a\nb ",
+            };
+            assert_eq!(doc.print(width).to_string(), expected);
+            assert_eq!(calls.get(), 1);
+        }
+    }
+}

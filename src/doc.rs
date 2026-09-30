@@ -35,7 +35,34 @@ where
     // Texts
     Text(Text<'a>),
     TextWithLen(usize, T), // Stores the length of a string document that is not just ascii
+
+    // Whitespace and lines
+    /// A deferred space, omitted at the start of a line and normally at its end.
+    /// A line suffix commits it even when empty, allowing trailing spaces.
+    ///
+    /// Consecutive weak spaces accumulate. Nonempty text commits the preceding
+    /// spaces. Empty text does not commit them. Flushing a line suffix also
+    /// commits them, without inspecting its contents.
+    WeakSpace,
+    /// An unconditional line break.
+    ///
+    /// Consecutive breaks preserve blank lines. A break's indentation is written
+    /// according to [`crate::IndentationPolicy`], chosen per render call: under
+    /// `Eager` it follows the terminator immediately, so blank lines and a terminal
+    /// break carry trailing spaces. Under `Deferred` they emit no indentation, empty
+    /// text and weak whitespace do not commit indentation, and a line suffix does.
     HardLine,
+    /// A line break omitted when the current line has no nonempty text.
+    ///
+    /// A pending line suffix is treated as content on the current line and is
+    /// flushed before the break. Its contents are not inspected during fitting
+    /// and do not change this assumption, even when the suffix is empty.
+    /// When used with weak whitespace, suffix documents must not emit line
+    /// breaks, including documents returned by contextual callbacks. Fitting
+    /// does not evaluate suffixes and cannot predict their line transitions.
+    /// This primitive has no flat alternative. Use [`DocBuilder::flat_alt`]
+    /// to provide a space or empty document when flattened in a group.
+    WeakLine,
 
     // Structural
     Append(T, T),  // Sequencing
@@ -129,7 +156,9 @@ where
             Doc::Nil => f.write_str("Nil"),
             Doc::Fail => f.write_str("Fail"),
 
+            Doc::WeakSpace => f.write_str("WeakSpace"),
             Doc::HardLine => f.write_str("HardLine"),
+            Doc::WeakLine => f.write_str("WeakLine"),
             Doc::TextWithLen(_, d) => d.fmt(f),
             Doc::Text(s) => s.fmt(f),
 
@@ -399,9 +428,22 @@ macro_rules! impl_doc_methods {
                 Doc::HardLine.into()
             }
 
+            /// A line break suppressed on an empty line, with no flat alternative.
+            /// See [`Doc::WeakLine`] for suffix handling.
+            #[inline]
+            pub fn weak_line() -> Self {
+                Doc::WeakLine.into()
+            }
+
             #[inline]
             pub fn space() -> Self {
                 Doc::Text(Text::Borrowed(" ")).into()
+            }
+
+            /// A deferred space; see [`Doc::WeakSpace`].
+            #[inline]
+            pub fn weak_space() -> Self {
+                Doc::WeakSpace.into()
             }
 
             /// Make the parent group break

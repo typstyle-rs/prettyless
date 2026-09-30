@@ -154,7 +154,7 @@ pub(crate) mod visitor;
 pub use alloc::{Arena, BoxAllocator, DocAllocator, RcAllocator};
 pub use builder::DocBuilder;
 pub use doc::{BoxDoc, BuildDoc, Doc, DocPtr, RcDoc, RefDoc};
-pub use render::{FmtWrite, IoWrite, LineEnding, Render, RenderOptions};
+pub use render::{FmtWrite, IndentationPolicy, IoWrite, LineEnding, Render, RenderOptions};
 
 /// Trait for types which can be converted to a `Document`
 pub trait Pretty<'a, D>

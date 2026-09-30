@@ -7,7 +7,7 @@ use std::{fmt, io};
 use crate::{Doc, DocPtr};
 
 use fit::print_doc;
-pub use options::{LineEnding, RenderOptions};
+pub use options::{IndentationPolicy, LineEnding, RenderOptions};
 pub use write::{FmtWrite, IoWrite};
 
 pub struct PrettyFmt<'a, 'd, T>

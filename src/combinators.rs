@@ -152,6 +152,13 @@ token_combinator!(
     soft_line_or_space, SoftLineOrSpace, softline
 );
 token_combinator!(
+    /// A line break omitted when the current line has no nonempty text.
+    ///
+    /// This primitive has no flat alternative; use [`flat_alt`] to supply one. A pending line
+    /// suffix counts as content. See [`Doc::WeakLine`](crate::Doc::WeakLine).
+    weak_line, WeakLine, weak_line
+);
+token_combinator!(
     /// A single space.
     space, Space, space
 );
@@ -174,6 +181,14 @@ where
         allocator.spaces(self.0)
     }
 }
+
+token_combinator!(
+    /// A deferred space, omitted at the start of a line and normally at its end.
+    ///
+    /// Consecutive weak spaces accumulate; nonempty text and line suffixes commit them. See
+    /// [`Doc::WeakSpace`](crate::Doc::WeakSpace).
+    weak_space, WeakSpace, weak_space
+);
 
 /// Renders `value` with its [`Display`](std::fmt::Display) impl, like
 /// [`DocAllocator::as_string`](crate::DocAllocator::as_string).
@@ -535,6 +550,8 @@ mod tests {
         assert_copy(soft_line_or_space());
         assert_copy(space());
         assert_copy(spaces(3));
+        assert_copy(weak_space());
+        assert_copy(weak_line());
         assert_copy(expand_parent());
     }
 

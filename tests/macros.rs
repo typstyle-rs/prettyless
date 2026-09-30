@@ -39,3 +39,17 @@ macro_rules! assert_print {
         assert_print!(80, $doc, $expected)
     };
 }
+
+/// Asserts that `doc`, rendered with `options`, is exactly `expected`.
+///
+/// Like [`assert_print!`], the expansion uses the caller's `BoxAllocator` and `DocAllocator`
+/// imports, and `doc` is anything implementing `Pretty`.
+#[macro_export]
+macro_rules! assert_print_with {
+    ($options:expr, $doc:expr, $expected:expr) => {
+        assert_eq!(
+            BoxAllocator.pretty($doc).print_with($options).to_string(),
+            $expected
+        )
+    };
+}
