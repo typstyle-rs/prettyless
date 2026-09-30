@@ -1,6 +1,6 @@
-use crate::{visitor::visit_sequence_rev, Doc, DocPtr, Render};
+use crate::{Doc, DocPtr, Render, visitor::visit_sequence_rev};
 
-use super::write::{write_newline, BufferWrite};
+use super::write::{BufferWrite, write_newline};
 
 pub fn print_doc<'a, W, T>(doc: &Doc<'a, T>, width: usize, out: &mut W) -> Result<(), W::Error>
 where

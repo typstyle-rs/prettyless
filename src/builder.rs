@@ -3,7 +3,7 @@ use std::{
     ops::{Add, AddAssign, Deref},
 };
 
-use crate::{text::Text, BuildDoc, Doc, DocAllocator, Pretty};
+use crate::{BuildDoc, Doc, DocAllocator, Pretty, text::Text};
 
 /// The `DocBuilder` type allows for convenient appending of documents even for arena allocated
 /// documents by storing the arena inline.

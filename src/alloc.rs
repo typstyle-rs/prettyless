@@ -1,6 +1,6 @@
 use std::{borrow::Cow, fmt};
 
-use crate::{text::Text, BuildDoc, Doc, DocBuilder, DocPtr, Pretty, RefDoc};
+use crate::{BuildDoc, Doc, DocBuilder, DocPtr, Pretty, RefDoc, text::Text};
 
 /// The `DocAllocator` trait abstracts over a type which can allocate (pointers to) `Doc`.
 pub trait DocAllocator<'a> {
