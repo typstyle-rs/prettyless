@@ -338,6 +338,10 @@ where
     ///        .union(arena.text("short") + arena.hard_line() + arena.text("short"));
     /// assert_eq!(doc.print(10).to_string(), "short\nshort");
     /// ```
+    ///
+    /// Suffixes still pending when the first branch finishes are rendered after
+    /// branch selection; their width or failure does not select the other branch.
+    /// Suffixes flushed by a break inside the branch participate in speculation.
     #[inline]
     pub fn union<E>(self, other: E) -> Self
     where

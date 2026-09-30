@@ -16,6 +16,8 @@ where
         }],
         fit_docs: vec![],
         line_suffixes: vec![],
+        suffix_start: 0,
+        union_depth: 0,
         width,
         #[cfg(feature = "contextual")]
         temp_arena: &typed_arena::Arena::new(),
@@ -57,6 +59,9 @@ where
     cmds: Vec<Cmd<'d, 'a, T>>,
     fit_docs: Vec<Cmd<'d, 'a, T>>,
     line_suffixes: Vec<&'d Doc<'a, T>>,
+    // Consumed entries survive speculation so rollback only restores indices.
+    suffix_start: usize,
+    union_depth: usize,
     width: usize,
     #[cfg(feature = "contextual")]
     temp_arena: &'d typed_arena::Arena<T>,
@@ -65,7 +70,8 @@ where
 #[derive(Default, Clone, Copy)]
 struct PrintState {
     cmd_top: usize,
-    line_suffix_top: usize,
+    // A union's pending suffixes belong to the caller's line, not its buffer.
+    defer_suffixes: bool,
 }
 
 /// The printer's current column, shared by rendering and fitting.
@@ -90,7 +96,7 @@ where
     {
         let PrintState {
             cmd_top: top,
-            line_suffix_top: ls_top,
+            defer_suffixes,
         } = state;
 
         let mut fits = true;
@@ -125,24 +131,20 @@ where
                     }
 
                     Doc::HardLine => {
-                        // flush line suffixes
-                        if self.line_suffixes.len() > ls_top {
+                        // A break ends the shared line, including suffixes queued
+                        // by the caller before entering this speculative branch.
+                        if self.suffix_start < self.line_suffixes.len() {
                             self.cmds.push(cmd);
-                            self.push_line_suffixes(ls_top, mode, indent);
+                            self.push_line_suffixes(mode, indent);
                             break;
                         }
 
-                        // The next document may have different indentation so we should use it if
-                        // we can
-                        if let Some(next) = self.cmds.pop() {
-                            write_newline(next.indent, out)?;
-                            self.column = ColumnState::new(next.indent);
-                            cmd = next;
-                        } else {
-                            write_newline(indent, out)?;
-                            self.column = ColumnState::new(indent);
-                            break;
-                        }
+                        // Borrow the continuation's indentation without consuming
+                        // it: a union buffer must stop at its saved command boundary.
+                        let next_indent = self.cmds.last().map_or(indent, |next| next.indent);
+                        write_newline(next_indent, out)?;
+                        self.column = ColumnState::new(next_indent);
+                        break;
                     }
 
                     Doc::Append(left, right) => {
@@ -194,11 +196,16 @@ where
                             continue;
                         }
 
-                        // Try the left branch in a buffer
+                        // Buffer output and save both queue boundaries. Flushing
+                        // advances suffix_start; new suffixes only append, so an
+                        // unsuccessful branch can restore the original queue.
                         let save_column = self.column;
+                        let save_suffix_start = self.suffix_start;
+                        let save_suffix_len = self.line_suffixes.len();
                         let save_state = PrintState {
                             cmd_top: self.cmds.len(),
-                            line_suffix_top: self.line_suffixes.len(),
+                            // Reaching the branch boundary is not the caller's EOF.
+                            defer_suffixes: true,
                         };
 
                         self.cmds.push(Cmd {
@@ -207,15 +214,21 @@ where
                             doc: left,
                         });
                         let mut buffer = BufferWrite::new();
+                        self.union_depth += 1;
+                        let fits = matches!(self.print_to(&mut buffer, save_state), Ok(true));
+                        self.union_depth -= 1;
 
-                        if let Ok(true) = self.print_to(&mut buffer, save_state) {
+                        if fits {
+                            self.compact_suffixes();
                             buffer.render(out)?;
                             break;
                         } else {
-                            // Revert and try right
+                            // Discard branch commands and newly queued suffixes,
+                            // then revive any caller suffixes the branch consumed.
                             self.column = save_column;
                             self.cmds.truncate(save_state.cmd_top);
-                            self.line_suffixes.truncate(save_state.line_suffix_top);
+                            self.line_suffixes.truncate(save_suffix_len);
+                            self.suffix_start = save_suffix_start;
                             cmd.doc = right;
                         }
                     }
@@ -238,20 +251,37 @@ where
                 }
             }
 
-            // handle line suffixes when all cleared
-            if self.cmds.len() == top && self.line_suffixes.len() > ls_top {
-                self.push_line_suffixes(ls_top, Mode::Break, 0);
+            // Only actual rendering EOF flushes the remaining suffixes. A union
+            // branch leaves them queued so later caller text precedes them.
+            if !defer_suffixes
+                && self.cmds.len() == top
+                && self.suffix_start < self.line_suffixes.len()
+            {
+                self.push_line_suffixes(Mode::Break, 0);
             }
         }
 
         Ok(fits)
     }
 
-    fn push_line_suffixes(&mut self, ls_top: usize, mode: Mode, indent: usize) {
-        self.line_suffixes
-            .drain(ls_top..)
-            .rev()
-            .for_each(|doc| self.cmds.push(Cmd { indent, mode, doc }));
+    fn push_line_suffixes(&mut self, mode: Mode, indent: usize) {
+        // Commands are popped from the end; reverse insertion preserves the
+        // order in which suffixes were queued on this line.
+        for index in (self.suffix_start..self.line_suffixes.len()).rev() {
+            let doc = self.line_suffixes[index];
+            self.cmds.push(Cmd { indent, mode, doc });
+        }
+        self.suffix_start = self.line_suffixes.len();
+        self.compact_suffixes();
+    }
+
+    fn compact_suffixes(&mut self) {
+        // Even a successful inner union may be rolled back by its outer union.
+        // Keep consumed entries until no speculative frame can need them again.
+        if self.union_depth == 0 && self.suffix_start > 0 {
+            self.line_suffixes.drain(..self.suffix_start);
+            self.suffix_start = 0;
+        }
     }
 
     fn fitting(&mut self, next: &'d Doc<'a, T>, indent: usize, mode: Mode) -> bool {
