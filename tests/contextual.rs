@@ -99,3 +99,61 @@ fn union() {
     )
     ");
 }
+
+#[test]
+fn fitting_tracks_each_commands_nesting() {
+    let a = Arena::new();
+    let nested = a
+        .on_nesting(|n| {
+            if n == 2 {
+                a.text("a").into_doc()
+            } else {
+                a.fail().into_doc()
+            }
+        })
+        .nest(2);
+    let doc = (nested + a.line() + a.text("b")).group();
+    assert_eq!(doc.print(3).to_string(), "a b");
+
+    let rooted = a
+        .on_nesting(|n| {
+            if n == 0 {
+                a.text("a").into_doc()
+            } else {
+                a.fail().into_doc()
+            }
+        })
+        .dedent_to_root();
+    let doc = (rooted + a.line() + a.text("b")).nest(2).group();
+    assert_eq!(doc.print(3).to_string(), "a b");
+
+    let continuation = a
+        .on_nesting(|n| {
+            if n == 3 {
+                a.nil().into_doc()
+            } else {
+                a.fail().into_doc()
+            }
+        })
+        .nest(3);
+    let doc = (a.text("a") + a.line() + a.text("b")).group() + continuation;
+    assert_eq!(doc.print(3).to_string(), "a b");
+}
+
+#[test]
+fn fitting_tracks_alignment_for_nesting_callbacks() {
+    let a = Arena::new();
+    let doc = (a.text("ab")
+        + (a.on_nesting(|n| {
+            if n == 2 {
+                a.text("c").into_doc()
+            } else {
+                a.fail().into_doc()
+            }
+        }) + a.line()
+            + a.text("d"))
+        .align())
+    .group();
+    assert_eq!(doc.print(5).to_string(), "abc d");
+    assert_eq!(doc.print(4).to_string(), "abc\n  d");
+}

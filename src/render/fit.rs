@@ -280,7 +280,9 @@ where
 
             // Drill into this doc until we either bail or consume a leaf.
             loop {
-                let Cmd { mode, doc, .. } = cmd;
+                // Contextual callbacks must observe this command's nesting,
+                // including when the command comes from the caller's continuation.
+                let Cmd { indent, mode, doc } = cmd;
                 match doc {
                     Doc::Nil => break,
                     Doc::Fail => return false,
@@ -337,12 +339,21 @@ where
                         cmd.doc = inner;
                     }
 
-                    Doc::Nest(_, inner)
-                    | Doc::DedentToRoot(inner)
-                    | Doc::Align(inner)
-                    | Doc::Group(inner)
-                    | Doc::Union(_, inner)
-                    | Doc::PartialUnion(_, inner) => {
+                    // These wrappers change callback inputs even before a line
+                    // break is emitted, so fitting must traverse them like rendering.
+                    Doc::Nest(offset, inner) => {
+                        cmd.indent = indent.saturating_add_signed(*offset);
+                        cmd.doc = inner;
+                    }
+                    Doc::DedentToRoot(inner) => {
+                        cmd.indent = 0;
+                        cmd.doc = inner;
+                    }
+                    Doc::Align(inner) => {
+                        cmd.indent = column.pos;
+                        cmd.doc = inner;
+                    }
+                    Doc::Group(inner) | Doc::Union(_, inner) | Doc::PartialUnion(_, inner) => {
                         cmd.doc = inner;
                     }
 
