@@ -1,4 +1,5 @@
 mod fit;
+mod options;
 mod write;
 
 use std::{fmt, io};
@@ -6,6 +7,7 @@ use std::{fmt, io};
 use crate::{Doc, DocPtr};
 
 use fit::print_doc;
+pub use options::RenderOptions;
 pub use write::{FmtWrite, IoWrite};
 
 pub struct PrettyFmt<'a, 'd, T>
@@ -13,7 +15,7 @@ where
     T: DocPtr<'a> + 'a,
 {
     doc: &'d Doc<'a, T>,
-    width: usize,
+    options: RenderOptions,
 }
 
 impl<'a, T> fmt::Display for PrettyFmt<'a, '_, T>
@@ -21,7 +23,7 @@ where
     T: DocPtr<'a>,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.doc.render_fmt(self.width, f)
+        self.doc.render_fmt_with(self.options, f)
     }
 }
 
@@ -30,33 +32,72 @@ where
     T: DocPtr<'a> + 'a,
 {
     /// Writes a rendered document to a `std::io::Write` object.
+    ///
+    /// Equivalent to [`render_with`](Doc::render_with) with
+    /// [`RenderOptions::new(width)`](RenderOptions::new).
     #[inline]
     pub fn render<W>(&self, width: usize, out: &mut W) -> io::Result<()>
     where
         W: ?Sized + io::Write,
     {
-        self.render_raw(width, &mut IoWrite::new(out))
+        self.render_with(RenderOptions::new(width), out)
+    }
+
+    /// Writes a rendered document to a `std::io::Write` object, honoring `options`.
+    #[inline]
+    pub fn render_with<W>(&self, options: RenderOptions, out: &mut W) -> io::Result<()>
+    where
+        W: ?Sized + io::Write,
+    {
+        self.render_raw_with(options, &mut IoWrite::new(out))
     }
 
     /// Writes a rendered document to a `std::fmt::Write` object.
+    ///
+    /// Equivalent to [`render_fmt_with`](Doc::render_fmt_with) with
+    /// [`RenderOptions::new(width)`](RenderOptions::new).
     #[inline]
     pub fn render_fmt<W>(&self, width: usize, out: &mut W) -> fmt::Result
     where
         W: ?Sized + fmt::Write,
     {
-        self.render_raw(width, &mut FmtWrite::new(out))
+        self.render_fmt_with(RenderOptions::new(width), out)
     }
 
-    /// Writes a rendered document to a `RenderAnnotated<A>` object.
+    /// Writes a rendered document to a `std::fmt::Write` object, honoring `options`.
+    #[inline]
+    pub fn render_fmt_with<W>(&self, options: RenderOptions, out: &mut W) -> fmt::Result
+    where
+        W: ?Sized + fmt::Write,
+    {
+        self.render_raw_with(options, &mut FmtWrite::new(out))
+    }
+
+    /// Writes a rendered document to a `Render` object.
+    ///
+    /// Equivalent to [`render_raw_with`](Doc::render_raw_with) with
+    /// [`RenderOptions::new(width)`](RenderOptions::new).
     #[inline]
     pub fn render_raw<W>(&self, width: usize, out: &mut W) -> Result<(), W::Error>
     where
         W: ?Sized + Render,
     {
-        print_doc(self, width, out)
+        self.render_raw_with(RenderOptions::new(width), out)
+    }
+
+    /// Writes a rendered document to a `Render` object, honoring `options`.
+    #[inline]
+    pub fn render_raw_with<W>(&self, options: RenderOptions, out: &mut W) -> Result<(), W::Error>
+    where
+        W: ?Sized + Render,
+    {
+        print_doc(self, options, out)
     }
 
     /// Returns a value which implements `std::fmt::Display`
+    ///
+    /// Equivalent to [`print_with`](Doc::print_with) with
+    /// [`RenderOptions::new(width)`](RenderOptions::new).
     ///
     /// ```
     /// use prettyless::{Doc, BoxDoc};
@@ -67,7 +108,13 @@ where
     /// ```
     #[inline]
     pub fn print<'d>(&'d self, width: usize) -> PrettyFmt<'a, 'd, T> {
-        PrettyFmt { doc: self, width }
+        self.print_with(RenderOptions::new(width))
+    }
+
+    /// Returns a value which implements `std::fmt::Display`, honoring `options`.
+    #[inline]
+    pub fn print_with<'d>(&'d self, options: RenderOptions) -> PrettyFmt<'a, 'd, T> {
+        PrettyFmt { doc: self, options }
     }
 }
 
