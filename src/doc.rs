@@ -1,8 +1,8 @@
 use std::{borrow::Cow, fmt, ops::Deref, rc::Rc};
 
 use crate::{
-    text::Text, visitor::visit_sequence_deep, BoxAllocator, DocAllocator, DocBuilder, Pretty,
-    RcAllocator,
+    BoxAllocator, DocAllocator, DocBuilder, Pretty, RcAllocator, text::Text,
+    visitor::visit_sequence_deep,
 };
 
 pub trait DocPtr<'a>: Deref<Target = Doc<'a, Self>> + Sized {
@@ -140,26 +140,26 @@ where
                 });
                 f.finish()
             }
-            Doc::LineSuffix(ref doc) => write_compact(f, doc, "LineSuffix"),
+            Doc::LineSuffix(doc) => write_compact(f, doc, "LineSuffix"),
 
-            Doc::Nest(off, ref doc) => {
+            Doc::Nest(off, doc) => {
                 write!(f, "Nest({off}, ",)?;
                 doc.fmt(f)?;
                 write!(f, ")")
             }
-            Doc::DedentToRoot(ref doc) => write_compact(f, doc, "DedentToRoot"),
-            Doc::Align(ref doc) => write_compact(f, doc, "Align"),
+            Doc::DedentToRoot(doc) => write_compact(f, doc, "DedentToRoot"),
+            Doc::Align(doc) => write_compact(f, doc, "Align"),
 
             Doc::ExpandParent => f.write_str("ExpandParent"),
-            Doc::Flatten(ref doc) => write_compact(f, doc, "Flatten"),
-            Doc::BreakOrFlat(ref x, ref y) => match (&**x, &**y) {
+            Doc::Flatten(doc) => write_compact(f, doc, "Flatten"),
+            Doc::BreakOrFlat(x, y) => match (&**x, &**y) {
                 (Doc::HardLine, Doc::Text(Text::Borrowed(" "))) => f.write_str("LineOrSpace"),
                 (Doc::HardLine, Doc::Nil) => f.write_str("LineOrNil"),
                 (_, Doc::Nil) => f.debug_tuple("WhenBreak").field(x).finish(),
                 (Doc::Nil, _) => f.debug_tuple("WhenFlat").field(y).finish(),
                 _ => f.debug_tuple("FlatOrBreak").field(y).field(x).finish(),
             },
-            Doc::Group(ref doc) => match &**doc {
+            Doc::Group(doc) => match &**doc {
                 Doc::BreakOrFlat(x, y)
                     if matches!(
                         (&**x, &**y),
@@ -173,10 +173,8 @@ where
                 }
                 _ => write_compact(f, doc, "Group"),
             },
-            Doc::Union(ref l, ref r) => f.debug_tuple("Union").field(l).field(r).finish(),
-            Doc::PartialUnion(ref l, ref r) => {
-                f.debug_tuple("PartialUnion").field(l).field(r).finish()
-            }
+            Doc::Union(l, r) => f.debug_tuple("Union").field(l).field(r).finish(),
+            Doc::PartialUnion(l, r) => f.debug_tuple("PartialUnion").field(l).field(r).finish(),
 
             #[cfg(feature = "contextual")]
             Doc::OnColumn(_) => f.write_str("OnColumn(..)"),

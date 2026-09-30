@@ -1,6 +1,6 @@
 use std::io;
 
-use criterion::{criterion_group, criterion_main, Bencher, Criterion};
+use criterion::{Bencher, Criterion, criterion_group, criterion_main};
 
 use crate::trees::Tree;
 use prettyless::{Arena, BoxAllocator};

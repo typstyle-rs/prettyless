@@ -1,14 +1,13 @@
 [package]
 name = "prettyless"
 version = "0.3.0"
-authors = ["QuadnucYard <quadnucyard@gmail.com>"]
 description = "Wadler-style pretty-printing combinators in Rust with more features."
 documentation = "https://docs.rs/prettyless/"
 keywords = ["functional", "pretty-printing"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/typstyle-rs/prettyless"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 # The newer versions of arrayvec are larger due to forced u32 lengths, would need to drop down Smalltext to 16 bytes
@@ -18,8 +17,8 @@ typed-arena = "2.0.0"
 unicode-width = "0.2"
 
 [dev-dependencies]
-criterion = "0.6"
-insta = "1.43"
+criterion = "0.8"
+insta = "1.48"
 tempfile = "3"
 
 [features]
