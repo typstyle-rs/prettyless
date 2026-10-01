@@ -7,7 +7,7 @@ use std::{fmt, io};
 use crate::{Doc, DocPtr};
 
 use fit::print_doc;
-pub use options::RenderOptions;
+pub use options::{LineEnding, RenderOptions};
 pub use write::{FmtWrite, IoWrite};
 
 pub struct PrettyFmt<'a, 'd, T>
@@ -112,6 +112,15 @@ where
     }
 
     /// Returns a value which implements `std::fmt::Display`, honoring `options`.
+    ///
+    /// ```
+    /// use prettyless::{Doc, BoxDoc, LineEnding, RenderOptions};
+    /// let doc = BoxDoc::group(
+    ///     BoxDoc::text("hello").append(Doc::line()).append(Doc::text("world"))
+    /// );
+    /// let options = RenderOptions::new(1).with_line_ending(LineEnding::Crlf);
+    /// assert_eq!(format!("{}", doc.print_with(options)), "hello\r\nworld");
+    /// ```
     #[inline]
     pub fn print_with<'d>(&'d self, options: RenderOptions) -> PrettyFmt<'a, 'd, T> {
         PrettyFmt { doc: self, options }
