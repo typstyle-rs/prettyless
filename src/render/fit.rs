@@ -189,6 +189,9 @@ where
                     }
                     Doc::Text(s) => {
                         fits &= self.write_str(out, s, s.len())?;
+                        if self.rejects_branch(fits) {
+                            return Ok(false);
+                        }
                         break;
                     }
 
@@ -199,6 +202,9 @@ where
                             _ => unreachable!(),
                         };
                         fits &= self.write_str(out, str, *len)?;
+                        if self.rejects_branch(fits) {
+                            return Ok(false);
+                        }
                         break;
                     }
 
@@ -207,6 +213,9 @@ where
                         // by the caller before entering this speculative branch.
                         if self.suffix_start < self.line_suffixes.len() {
                             fits &= self.write_suffix_padding(out)?;
+                            if self.rejects_branch(fits) {
+                                return Ok(false);
+                            }
                             self.cmds.push(cmd);
                             self.push_line_suffixes(mode, indent);
                             break;
@@ -344,6 +353,16 @@ where
                 self.options.width,
                 self.suffix_start < self.line_suffixes.len(),
             ))
+    }
+
+    /// Whether a speculative branch can be abandoned once it has failed.
+    ///
+    /// Inside a branch (`union_depth > 0`) a text that landed past the width has
+    /// already decided it: the union that opened the branch discards the buffered
+    /// output and restores the column, the command stack and the suffix queue, so
+    /// rendering the rest of the branch cannot change any result.
+    fn rejects_branch(&self, fits: bool) -> bool {
+        !fits && self.union_depth > 0
     }
 
     fn push_line_suffixes(&mut self, mode: Mode, indent: usize) {
