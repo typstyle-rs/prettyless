@@ -21,6 +21,8 @@ where
 {
     type Error = io::Error;
 
+    /// Byte oriented: a partial `io::Write` may stop inside a character, so this
+    /// is only usable together with the `write_str_all` override below.
     fn write_str(&mut self, s: &str) -> io::Result<usize> {
         self.upstream.write(s.as_bytes())
     }
@@ -107,7 +109,8 @@ where
     let mut remaining = spaces;
     while remaining > 0 {
         let insert = SPACES.len().min(remaining);
-        remaining -= out.write_str(&SPACES[..insert])?;
+        out.write_str_all(&SPACES[..insert])?;
+        remaining -= insert;
     }
 
     Ok(())
