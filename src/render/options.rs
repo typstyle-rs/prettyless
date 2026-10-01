@@ -13,13 +13,17 @@
 /// doc.render_fmt_with(options, &mut out).unwrap();
 /// assert_eq!(out, "a\r\nb");
 /// ```
-///
-/// All fields are private, so new options can be added without breaking callers.
 #[derive(Clone, Copy, Debug)]
 #[must_use]
+#[non_exhaustive]
 pub struct RenderOptions {
-    width: usize,
-    line_ending: LineEnding,
+    /// The target line width.
+    ///
+    /// Layout aims to keep lines within this width, but unbreakable text and line
+    /// suffixes can exceed it.
+    pub width: usize,
+    /// The terminator emitted for structural breaks.
+    pub line_ending: LineEnding,
 }
 
 impl RenderOptions {
@@ -44,21 +48,6 @@ impl RenderOptions {
     pub const fn with_line_ending(mut self, ending: LineEnding) -> Self {
         self.line_ending = ending;
         self
-    }
-
-    /// The target line width.
-    ///
-    /// Layout aims to keep lines within this width, but unbreakable text and line
-    /// suffixes can exceed it.
-    #[inline]
-    pub const fn width(self) -> usize {
-        self.width
-    }
-
-    /// The terminator emitted for structural breaks.
-    #[inline]
-    pub const fn line_ending(self) -> LineEnding {
-        self.line_ending
     }
 }
 
