@@ -8,12 +8,12 @@ fn crlf_line_endings() {
     let doc = (a.text("x") + a.hard_line() + a.text("y")).nest(2) + a.hard_line() + a.text("z");
     let crlf = RenderOptions::new(80).with_line_ending(LineEnding::Crlf);
 
-    assert_eq!(crlf.width(), 80);
-    assert_eq!(crlf.line_ending(), LineEnding::Crlf);
-    assert_eq!(RenderOptions::new(80).line_ending(), LineEnding::Lf);
+    assert_eq!(crlf.width, 80);
+    assert_eq!(crlf.line_ending, LineEnding::Crlf);
+    assert_eq!(RenderOptions::new(80).line_ending, LineEnding::Lf);
     // `with_width` reuses configured options without dropping the other settings.
-    assert_eq!(crlf.with_width(40).width(), 40);
-    assert_eq!(crlf.with_width(40).line_ending(), LineEnding::Crlf);
+    assert_eq!(crlf.with_width(40).width, 40);
+    assert_eq!(crlf.with_width(40).line_ending, LineEnding::Crlf);
 
     assert_eq!(doc.print_with(crlf).to_string(), "x\r\n  y\r\nz");
     assert_eq!(

@@ -1,7 +1,7 @@
 use crate::{Doc, DocPtr, Render, visitor::visit_sequence_rev};
 
 use super::{
-    LineEnding, RenderOptions,
+    RenderOptions,
     write::{BufferWrite, write_newline},
 };
 
@@ -25,8 +25,7 @@ where
         line_suffixes: vec![],
         suffix_start: 0,
         union_depth: 0,
-        width: options.width(),
-        line_ending: options.line_ending(),
+        options,
         #[cfg(feature = "contextual")]
         temp_arena: &typed_arena::Arena::new(),
     }
@@ -70,8 +69,7 @@ where
     // Consumed entries survive speculation so rollback only restores indices.
     suffix_start: usize,
     union_depth: usize,
-    width: usize,
-    line_ending: LineEnding,
+    options: RenderOptions,
     #[cfg(feature = "contextual")]
     temp_arena: &'d typed_arena::Arena<T>,
 }
@@ -123,7 +121,7 @@ where
                     Doc::Text(s) => {
                         out.write_str_all(s)?;
                         self.column.pos += s.len();
-                        fits &= self.column.pos <= self.width;
+                        fits &= self.column.pos <= self.options.width;
                         break;
                     }
 
@@ -135,7 +133,7 @@ where
                         };
                         out.write_str_all(str)?;
                         self.column.pos += len;
-                        fits &= self.column.pos <= self.width;
+                        fits &= self.column.pos <= self.options.width;
                         break;
                     }
 
@@ -151,7 +149,7 @@ where
                         // Borrow the continuation's indentation without consuming
                         // it: a union buffer must stop at its saved command boundary.
                         let next_indent = self.cmds.last().map_or(indent, |next| next.indent);
-                        write_newline(next_indent, self.line_ending, out)?;
+                        write_newline(next_indent, self.options.line_ending, out)?;
                         self.column = ColumnState::new(next_indent);
                         break;
                     }
@@ -328,14 +326,14 @@ where
 
                     Doc::Text(s) => {
                         column.pos += s.len();
-                        if column.pos > self.width {
+                        if column.pos > self.options.width {
                             return false;
                         }
                         break;
                     }
                     Doc::TextWithLen(len, _) => {
                         column.pos += len;
-                        if column.pos > self.width {
+                        if column.pos > self.options.width {
                             return false;
                         }
                         break;
