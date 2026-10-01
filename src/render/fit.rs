@@ -66,7 +66,12 @@ where
     cmds: Vec<Cmd<'d, 'a, T>>,
     fit_docs: Vec<Cmd<'d, 'a, T>>,
     line_suffixes: Vec<&'d Doc<'a, T>>,
-    // Consumed entries survive speculation so rollback only restores indices.
+    // Suffix entries are only ever appended while a speculative frame is open, so
+    // a rejected branch can restore the queue by truncating it. `suffix_start`
+    // marks how many entries the current line has already consumed; rollback
+    // restores it with the length, so consumed entries stay available.
+    // `compact_suffixes` may drain them only when no branch is open
+    // (`union_depth == 0`).
     suffix_start: usize,
     union_depth: usize,
     options: RenderOptions,
@@ -543,6 +548,11 @@ where
                         cmd.indent = column.prospective_column();
                         cmd.doc = inner;
                     }
+                    // In break mode a union reached through the continuation is probed by its
+                    // fallback branch, not by the preferred branch it would actually
+                    // render when that branch fits. The probe therefore never assumes
+                    // a tail the union may decline, at the price of breaking a group
+                    // earlier than the rendered tail needs. See `DocBuilder::union`.
                     Doc::Group(inner) | Doc::Union(_, inner) | Doc::PartialUnion(_, inner) => {
                         cmd.doc = inner;
                     }

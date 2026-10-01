@@ -340,6 +340,46 @@ fn cjk_display_width() {
     ");
 }
 
+// A group probing the rest of its line measures a union in that tail by the
+// union's fallback branch, not by the preferred branch the union would render.
+// The probe therefore reports a tail that is longer than the output needs, and
+// the group breaks although the rendered line would have fit. See
+// `DocBuilder::union` for the contract.
+#[test]
+fn group_probe_measures_a_tail_union_by_its_fallback() {
+    let a = Arena::new();
+    let group = (a.line() + a.text("bb")).group();
+
+    // The union renders nothing at all in both cases.
+    let control = a.text("aa") + group.clone() + a.nil();
+    let tail_union = a.text("aa") + group + a.nil().union(a.text("cccccccc"));
+
+    assert_eq!(control.print(5).to_string(), "aa bb");
+    assert_eq!(tail_union.print(5).to_string(), "aa\nbb");
+    // The fallback itself fits at width 13, so the tail fits and the group stays flat.
+    assert_eq!(tail_union.print(13).to_string(), "aa bb");
+}
+
+// `align` measures the column where the next text would start, including weak
+// padding that the aligned break then discards.
+#[test]
+fn align_sees_padding_that_a_break_discards() {
+    let a = Arena::new();
+    let doc = a.text("a") + a.weak_space() + (a.hard_line() + a.text("b")).align();
+
+    assert_eq!(doc.print(80).to_string(), "a\n  b");
+}
+
+#[test]
+fn union_after_overflow_still_chooses_fitting_layout() {
+    let a = Arena::new();
+    let choice = a
+        .text("a b")
+        .union(a.text("a") + a.hard_line() + a.text("b"));
+    let doc = a.text("long") + a.hard_line() + choice;
+    assert_eq!(doc.print(3).to_string(), "long\na b");
+}
+
 #[test]
 fn pretty_cow() {
     let doc = BoxAllocator

@@ -307,6 +307,11 @@ where
 
     /// Lays out `self` so with the nesting level set to the current column
     ///
+    /// The column is the one where the next text would start, including weak
+    /// padding that is still pending. A break inside `self` discards that
+    /// padding, so the indentation can exceed the column the preceding line
+    /// actually reaches.
+    ///
     /// ```rust
     /// use prettyless::{docs, DocAllocator};
     ///
@@ -350,6 +355,25 @@ where
     /// Suffixes still pending when the first branch finishes are rendered after
     /// branch selection; their width or failure does not select the other branch.
     /// Suffixes flushed by a break inside the branch participate in speculation.
+    ///
+    /// # Selection
+    ///
+    /// The first branch is rendered speculatively and kept when every text it
+    /// commits lands at or before the width, measured from the column the union
+    /// starts at. Only the branch's own output is measured: the continuation
+    /// after the union is not part of the decision, so text that follows a union
+    /// can still exceed the width, and the branch chosen when the first one fails
+    /// is never measured at all.
+    ///
+    /// A union asserts that both branches spell the same content and differ only
+    /// in layout. Rendering keeps one of them, so a branch that adds, drops or
+    /// reorders text silently produces that variant's output.
+    ///
+    /// A group tests the rest of its line with [`DocBuilder::union`]'s *fallback*
+    /// branch when a union appears in that tail (see
+    /// `Printer::fitting`). The group therefore breaks earlier than the rendered
+    /// tail may need; text inside the union itself never overflows because the
+    /// accepted branch is measured against its real starting column.
     #[inline]
     pub fn union<E>(self, other: E) -> Self
     where
@@ -362,6 +386,11 @@ where
     }
 
     /// Like `union`, but it only ensures fitting on the first line.
+    ///
+    /// The first branch is kept when its text up to its first break lands at or
+    /// before the width; everything after that break is not measured. The
+    /// fallback is never measured, and a group testing a tail containing this
+    /// union also measures the fallback.
     ///
     /// ```
     /// use prettyless::{Arena, DocAllocator};

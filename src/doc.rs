@@ -30,6 +30,13 @@ where
     // Primitives
     #[default]
     Nil,
+    /// A document that cannot be rendered: rendering stops and reports the sink's
+    /// [`Render::fail_doc`](crate::Render::fail_doc) error.
+    ///
+    /// As the first branch of a [`DocBuilder::union`](crate::DocBuilder::union)
+    /// it only rejects that branch, so the fallback is rendered instead. Queued in
+    /// a line suffix it surfaces when the suffix is flushed, which is after the
+    /// branch that queued it has been selected.
     Fail,
 
     // Texts
