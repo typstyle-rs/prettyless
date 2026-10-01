@@ -141,6 +141,33 @@
 //! [DocBuilder](struct.DocBuilder.html) instances.  See
 //! [examples/trees.rs](https://github.com/freebroccolo/pretty.rs/blob/master/examples/trees.rs#L39)
 //! for this approach.
+//!
+//! ## Line width
+//!
+//! Layout decisions are local, so the guarantee is: a text node never lands past
+//! the width unless the node had no alternative left to take.
+//!
+//! * A [group](DocBuilder::group) is flattened when its own flat content plus the
+//!   rest of the line fits. The rest of the line is measured with the *fallback*
+//!   branch of a [union](DocBuilder::union) in it, so a group can break earlier
+//!   than the rendered line needs.
+//! * A union keeps its first branch when that branch's own output fits, measured
+//!   from the column the union starts at. Text that follows the union is not part
+//!   of that decision and can exceed the width; the branch taken as a fallback is
+//!   never measured.
+//! * A document that has no alternative left renders past the width rather than
+//!   dropping or splitting text.
+//!
+//! Text nodes are never split, reordered or dropped: rendering only inserts
+//! spaces, breaks and indentation.
+//!
+//! ## Indentation
+//!
+//! A break's indentation is written according to
+//! [IndentationPolicy](struct.IndentationPolicy.html), chosen per render call.
+//! `Eager`, the default and the behavior of upstream `pretty`, writes it after
+//! the terminator, so blank lines and a trailing break carry trailing spaces;
+//! `Deferred` postpones it until content on the new line commits it.
 
 mod alloc;
 mod builder;
