@@ -2,8 +2,13 @@
 
 ## Unreleased
 
+## v0.4.0 (2026-10-11)
+
 ### Added
 
+- `RenderOptions`, with public fields and fluent setters, and `Doc::render_with`, `render_fmt_with`, `render_raw_with`, and `print_with`. The struct is `#[non_exhaustive]` so future options stay additive. Existing width-based entry points retain LF line endings and eager indentation.
+- `LineEnding::{Lf, Crlf}` for structural document breaks. Embedded text is written verbatim; line terminators do not affect fitting or contextual columns.
+- `Pretty` implementations for tuples of up to 16 elements, including the unit tuple, concatenate their items using the selected allocator.
 - `Doc::WeakSpace` and `Doc::WeakLine` weak whitespace primitives: a weak space is omitted at the start of a line and dropped at its end unless a line suffix commits it, and a weak line is a break skipped when its line has no nonempty text, with no flat alternative of its own (`flat_alt` supplies one). Constructors: `DocAllocator::weak_space`/`weak_line`, the `weak_line`/`weak_space` statics of `Doc`, `BuildDoc`, `BoxDoc` and `RcDoc`, and the `weak_space`/`weak_line` combinators.
 - `IndentationPolicy`, which controls when a break writes its indentation, selected through the new `RenderOptions::indentation_policy` field or `RenderOptions::with_indentation_policy`.
 - `combinators` module: allocator-free combinators implementing `Pretty`. `nil`, `fail`, `hard_line`, `line_or_nil`, `line_or_space`, `soft_line_or_nil`, `soft_line_or_space`, `space`, `spaces`, `weak_space`, `weak_line`, `as_string`, `expand_parent`, `line_suffix`, `nest`/`indent`/`dedent`, `group`, `align`, `dedent_to_root`, `flatten`, `union`, `partial_union`, `flat_alt`, `concat`, `intersperse`, `repeat`, and (under `contextual`) `on_column`/`on_nesting`.
@@ -13,10 +18,29 @@
 
 ### Changed
 
+- Rust edition is now 2024, requiring Rust 1.85 or newer.
+- **Breaking:** the new `Doc::WeakSpace` and `Doc::WeakLine` variants require updating exhaustive matches on `Doc`.
+- `hard_line` replaces the deprecated `hardline` spelling; the old constructors remain available for migration.
 - **Behavior:** a break's indentation is written according to `RenderOptions::indentation_policy`. `Eager`, the default, keeps the previous output; `Deferred` omits the indentation of blank lines and of a trailing break, leaving it to be committed by the next nonempty text or a line suffix.
 - **Behavior:** `DocBuilder::indent`/`dedent` and `combinators::indent`/`dedent` panic on offsets above `isize::MAX` instead of silently reinterpreting them as negative offsets.
 - **Behavior:** a hard break fails when explicitly forced flat. `DocBuilder::flatten` already turned a direct `HardLine` into `Fail`; the renderer now also fails on a `HardLine` reached in flat mode (inside `Flatten` or a flat branch), so the result no longer depends on whether the same content is represented as one node or several. Groups already rejected such content through fitting; rendering now agrees.
 - **Performance:** nested `union` branches reuse accepted output buffers when their parent is empty, avoiding repeated allocation and copying at each nesting level. Local release probes with a 1 MiB payload rendered to a discard sink observed about 10.9 ms before refinement and 0.54 ms afterward at depth 32 (roughly 20× faster). These separate runs used different document shapes, so the gain is indicative rather than an isolated measurement of buffer reuse. Parents that already contain output still copy the accepted bytes.
+
+### Fixed
+
+- Preserve line suffixes when speculating over `union` and `partial_union` branches, so rejected branches do not lose or duplicate pending suffixes.
+- Track nesting correctly during contextual fitting, so `on_nesting` sees the same nesting as rendering.
+- Reject zero-progress, oversized, and non-UTF-8-boundary counts from `Render::write_str` through the new default `Render::write_fault` method instead of hanging or panicking. `IoWrite` still handles byte-oriented partial writes through its direct `write_str_all` implementation.
+
+### Performance
+
+- Release rejected union-branch scratch state earlier and share column/command handling between rendering and fitting.
+
+### Maintenance
+
+- Add criterion regression benchmarks for the construction and rendering hot paths, weak whitespace and the indentation policy, line suffixes, union buffer reuse, and multiline text (`hot_paths`, `weak_whitespace`, `whitespace_policy`, `line_suffixes`, `union_buffers`, `multiline_text`). Every benchmark asserts exact output before timing, so a wrong layout fails the run instead of reporting a number.
+- Migrate the test suite to `insta` snapshot tests; `criterion` is bumped to 0.8 and the `difference` and `expect-test` dev-dependencies are dropped.
+- Add a tag-triggered GitHub release workflow with feature-combination tests, package verification, crates.io Trusted Publishing, and GitHub Release notes extracted from this changelog. See `RELEASING.md` for setup and recovery.
 
 ## v0.3.0 (2025-07-17)
 
