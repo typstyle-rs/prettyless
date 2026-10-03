@@ -1,6 +1,6 @@
 [package]
 name = "prettyless"
-version = "0.3.0"
+version = "0.4.0"
 description = "Wadler-style pretty-printing combinators in Rust with more features."
 documentation = "https://docs.rs/prettyless/"
 keywords = ["functional", "pretty-printing"]
