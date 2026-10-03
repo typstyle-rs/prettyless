@@ -1,0 +1,98 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+# Never cancel a run that may already have published an immutable crate version.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  publish:
+    if: github.repository == 'typstyle-rs/prettyless'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: crates-io
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate release commit and metadata
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          git merge-base --is-ancestor HEAD origin/main
+          test "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" = "$(git rev-parse HEAD)"
+          python3 .github/scripts/release.py "$RELEASE_TAG" --notes "$RUNNER_TEMP/release-notes.md"
+          python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: stable
+      - name: Test every feature combination
+        run: |
+          cargo generate-lockfile
+          cargo test --locked
+          cargo test --locked --features contextual
+          cargo test --locked --features small-text
+          cargo test --locked --all-features
+          cargo test --locked --all-features --examples --benches
+          cargo doc --locked --no-deps --all-features
+      - name: Verify the publishable package without credentials
+        run: cargo publish --dry-run --locked --all-features --registry crates-io
+      - name: Verify any existing crates.io version
+        id: registry
+        run: python3 .github/scripts/release_state.py crate --commit "$(git rev-parse HEAD)"
+      - name: Authenticate with crates.io
+        if: steps.registry.outputs.published != 'true'
+        id: auth
+        uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+      - name: Publish to crates.io
+        if: steps.registry.outputs.published != 'true'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: |
+          if cargo publish --locked --all-features --registry crates-io; then
+            exit 0
+          fi
+          python3 .github/scripts/release_state.py crate \
+            --commit "$(git rev-parse HEAD)" --require-published
+
+  github-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Extract changelog notes
+        id: notes
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python3 .github/scripts/release.py "$RELEASE_TAG" --notes "$RUNNER_TEMP/release-notes.md"
+      - name: Create or verify GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python3 .github/scripts/release_state.py github \
+            --tag "$RELEASE_TAG" --commit "$(git rev-parse HEAD)" \
+            --notes "$RUNNER_TEMP/release-notes.md"

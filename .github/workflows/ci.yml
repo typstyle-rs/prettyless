@@ -13,6 +13,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Test release metadata validation
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+
       - name: rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
