@@ -34,6 +34,14 @@ name = "trees"
 harness = false
 
 [[bench]]
+name = "hot_paths"
+harness = false
+
+[[bench]]
+name = "whitespace_policy"
+harness = false
+
+[[bench]]
 name = "weak_whitespace"
 harness = false
 
