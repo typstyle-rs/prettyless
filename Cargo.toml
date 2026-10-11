@@ -40,3 +40,7 @@ harness = false
 [[bench]]
 name = "line_suffixes"
 harness = false
+
+[[bench]]
+name = "union_buffers"
+harness = false

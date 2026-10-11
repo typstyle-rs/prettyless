@@ -66,23 +66,80 @@ where
     }
 }
 
+/// Internal extension of [`Render`] for committing an accepted union branch.
+///
+/// Branch output is committed once its layout succeeds. Consuming the buffer
+/// lets a speculative parent reuse its storage instead of copying the same
+/// bytes at each nesting level; direct outputs forward the bytes to their sink.
+pub(super) trait PrintWrite: Render {
+    /// Appends an accepted branch's bytes in order, consuming its output buffer.
+    ///
+    /// This must preserve existing output and the bytes in the buffer. It must
+    /// not render the branch again: its callbacks and layout decisions have
+    /// already run during speculation.
+    ///
+    /// # Errors
+    ///
+    /// Propagates errors from the destination sink. The branch has already been
+    /// selected, so a sink error must not cause its union to try the fallback.
+    fn write_buffer(&mut self, buffer: BufferWrite) -> Result<(), Self::Error>;
+}
+
+/// Adapts a [`Render`] sink to the printer's [`PrintWrite`] contract.
+///
+/// Ordinary writes and errors are forwarded, including any override of
+/// [`Render::write_str_all`] needed for byte-oriented partial writes.
+pub(super) struct DirectWrite<'w, W: ?Sized>(&'w mut W);
+
+impl<'w, W: ?Sized> DirectWrite<'w, W> {
+    /// Wraps a sink without buffering its ordinary writes.
+    pub(super) fn new(out: &'w mut W) -> Self {
+        Self(out)
+    }
+}
+
+impl<W: ?Sized + Render> Render for DirectWrite<'_, W> {
+    type Error = W::Error;
+
+    fn write_str(&mut self, s: &str) -> Result<usize, Self::Error> {
+        self.0.write_str(s)
+    }
+
+    fn write_str_all(&mut self, s: &str) -> Result<(), Self::Error> {
+        self.0.write_str_all(s)
+    }
+
+    fn fail_doc(&self) -> Self::Error {
+        self.0.fail_doc()
+    }
+
+    fn write_fault(&self) -> Self::Error {
+        self.0.write_fault()
+    }
+}
+
+impl<W: ?Sized + Render> PrintWrite for DirectWrite<'_, W> {
+    fn write_buffer(&mut self, buffer: BufferWrite) -> Result<(), Self::Error> {
+        self.0.write_str_all(&buffer.buffer)
+    }
+}
+
+/// Owns the output of a speculative union branch.
+///
+/// Rejected output is discarded with this buffer. Accepted output is consumed
+/// through [`PrintWrite::write_buffer`], preserving the already evaluated
+/// layout and allowing an empty parent buffer to take ownership of its storage.
 pub(super) struct BufferWrite {
+    /// UTF-8 output collected while the branch is still speculative.
     buffer: String,
 }
 
 impl BufferWrite {
+    /// Starts an empty branch without allocating storage until it writes bytes.
     pub(super) fn new() -> Self {
         BufferWrite {
             buffer: String::new(),
         }
-    }
-
-    pub(super) fn render<W>(&mut self, render: &mut W) -> Result<(), W::Error>
-    where
-        W: ?Sized + Render,
-    {
-        render.write_str_all(&self.buffer)?;
-        Ok(())
     }
 }
 
@@ -100,6 +157,17 @@ impl Render for BufferWrite {
     }
 
     fn fail_doc(&self) -> Self::Error {}
+}
+
+impl PrintWrite for BufferWrite {
+    fn write_buffer(&mut self, buffer: BufferWrite) -> Result<(), Self::Error> {
+        if self.buffer.is_empty() {
+            self.buffer = buffer.buffer;
+        } else {
+            self.buffer.push_str(&buffer.buffer);
+        }
+        Ok(())
+    }
 }
 
 pub(super) fn write_spaces<W>(spaces: usize, out: &mut W) -> Result<(), W::Error>

@@ -14,6 +14,7 @@
 
 - **Behavior:** a break's indentation is written according to `RenderOptions::indentation_policy`. `Eager`, the default, keeps the previous output; `Deferred` omits the indentation of blank lines and of a trailing break, leaving it to be committed by the next nonempty text or a line suffix.
 - **Behavior:** `DocBuilder::indent`/`dedent` and `combinators::indent`/`dedent` panic on offsets above `isize::MAX` instead of silently reinterpreting them as negative offsets.
+- **Performance:** nested `union` branches reuse accepted output buffers when their parent is empty, avoiding repeated allocation and copying at each nesting level. Local release probes with a 1 MiB payload rendered to a discard sink observed about 10.9 ms before refinement and 0.54 ms afterward at depth 32 (roughly 20× faster). These separate runs used different document shapes, so the gain is indicative rather than an isolated measurement of buffer reuse. Parents that already contain output still copy the accepted bytes.
 
 ## v0.3.0 (2025-07-17)
 
