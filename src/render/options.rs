@@ -65,8 +65,9 @@ impl RenderOptions {
 /// The line terminator emitted for document line breaks when rendering.
 ///
 /// Selected through [`RenderOptions`]. It applies to every structural document break,
-/// including breaks emitted inside line suffixes and union branches. Text nodes are
-/// written verbatim, so newlines embedded in text (`Doc::text("a\nb")`) are never
+/// including breaks emitted inside line suffixes and union branches. Text is written
+/// verbatim, so newlines embedded in text (`Doc::text("a\nb")`) and the terminators
+/// inside a [`Doc::MultilineText`](crate::Doc::MultilineText) payload are never
 /// normalized, and the terminator length never affects fitting, indentation, or
 /// contextual column values. [`LineEnding::Lf`] is the default.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

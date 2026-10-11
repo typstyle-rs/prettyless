@@ -44,3 +44,7 @@ harness = false
 [[bench]]
 name = "union_buffers"
 harness = false
+
+[[bench]]
+name = "multiline_text"
+harness = false

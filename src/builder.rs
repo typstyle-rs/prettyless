@@ -207,7 +207,7 @@ where
         allocator.if_group_break(this)
     }
 
-    /// Flatten inner docs. Hard line will turn to failure.
+    /// Flatten inner docs. Hard lines and multi-line text turn to failure.
     #[inline]
     pub fn flatten(self) -> Self {
         let Self(allocator, this) = self;
@@ -215,7 +215,7 @@ where
             Doc::Nil | Doc::Text(_) | Doc::TextWithLen(_, _) | Doc::Flatten(_) => {
                 Self(allocator, this)
             }
-            Doc::HardLine => self.0.fail(),
+            Doc::HardLine | Doc::MultilineText(_) => self.0.fail(),
             _ => DocBuilder(allocator, Doc::Flatten(allocator.alloc_cow(this)).into()),
         }
     }
@@ -229,7 +229,11 @@ where
     #[inline]
     pub fn group(self) -> Self {
         match *self.1 {
-            Doc::Nil | Doc::Text(_) | Doc::TextWithLen(_, _) | Doc::Group(_) => self,
+            Doc::Nil
+            | Doc::Text(_)
+            | Doc::TextWithLen(_, _)
+            | Doc::MultilineText(_)
+            | Doc::Group(_) => self,
             _ => {
                 let Self(allocator, this) = self;
                 Self(allocator, Doc::Group(allocator.alloc_cow(this)).into())
@@ -358,12 +362,11 @@ where
     ///
     /// # Selection
     ///
-    /// The first branch is rendered speculatively and kept when every text it
-    /// commits lands at or before the width, measured from the column the union
-    /// starts at. Only the branch's own output is measured: the continuation
-    /// after the union is not part of the decision, so text that follows a union
-    /// can still exceed the width, and the branch chosen when the first one fails
-    /// is never measured at all.
+    /// The first branch is kept when every text it commits lands at or before
+    /// the width, measured from the column the union starts at. Only the
+    /// branch's own output is measured: the continuation after the union is not
+    /// part of the decision, so text that follows a union can still exceed the
+    /// width. The fallback is selected even if it overflows.
     ///
     /// A union asserts that both branches spell the same content and differ only
     /// in layout. Rendering keeps one of them, so a branch that adds, drops or
@@ -389,8 +392,8 @@ where
     ///
     /// The first branch is kept when its text up to its first break lands at or
     /// before the width; everything after that break is not measured. The
-    /// fallback is never measured, and a group testing a tail containing this
-    /// union also measures the fallback.
+    /// fallback is selected even if it overflows, and a group testing a tail
+    /// containing this union measures the fallback.
     ///
     /// ```
     /// use prettyless::{Arena, DocAllocator};
