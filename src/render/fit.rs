@@ -1,4 +1,4 @@
-use crate::{Doc, DocPtr, Render, visitor::visit_sequence_rev};
+use crate::{Doc, DocPtr, Render, text::MultilineMetrics, visitor::visit_sequence_rev};
 
 use super::{
     IndentationPolicy, RenderOptions,
@@ -118,6 +118,21 @@ impl ColumnState {
         self.pos <= width
     }
 
+    /// Checks every physical line using a payload's cached metrics.
+    ///
+    /// Only a nonempty first line commits this column's pending indentation
+    /// and padding; every later line starts at column zero. Embedded breaks
+    /// leave no pending padding for suffixes to commit, so this check does not
+    /// inspect or flush the suffix queue. The column remains unchanged.
+    fn fits_multiline(self, metrics: &MultilineMetrics, width: usize) -> bool {
+        (!metrics.first_nonempty
+            || self
+                .prospective_column()
+                .saturating_add(metrics.first_width)
+                <= width)
+            && metrics.max_rest_width <= width
+    }
+
     fn fits_suffix_padding(self, width: usize, has_suffix: bool) -> bool {
         // Trailing weak spaces disappear unless a suffix commits them. Count
         // that padding consistently in rendering and fitting, excluding suffix text.
@@ -213,6 +228,42 @@ where
                         break;
                     }
 
+                    Doc::MultilineText(data) => {
+                        // Embedded breaks cannot be laid out flat; `flat_alt`
+                        // supplies another representation instead.
+                        if mode == Mode::Flat {
+                            return Err(out.fail_doc());
+                        }
+                        let metrics = data.metrics();
+                        // Later lines all start at column zero, with no layout
+                        // actions inside the payload. Reject a speculative
+                        // branch before buffering a payload that cannot fit.
+                        fits &= self.column.fits_multiline(metrics, self.options.width);
+                        if self.rejects_branch(fits) {
+                            return Ok(false);
+                        }
+                        let spaces = if metrics.first_nonempty {
+                            self.column.commit_content(metrics.first_width)
+                        } else {
+                            0
+                        };
+                        write_spaces(spaces, out)?;
+                        out.write_str_all(data.as_str())?;
+                        // Embedded breaks drop pending whitespace without
+                        // flushing suffixes or generating indentation.
+                        self.column = ColumnState::new(0);
+                        if metrics.last_nonempty {
+                            self.column.commit_content(metrics.last_width);
+                        }
+                        break;
+                    }
+
+                    // A hard break has no flat representation, so a context
+                    // forced flat fails like a direct `Flatten` of one would.
+                    // This keeps `flatten` of one hard line and of a document
+                    // containing it consistent.
+                    Doc::HardLine if mode == Mode::Flat => return Err(out.fail_doc()),
+
                     Doc::HardLine | Doc::WeakLine => {
                         // A break ends the shared line, including suffixes queued
                         // by the caller before entering this speculative branch.
@@ -282,6 +333,17 @@ where
                     Doc::Union(left, right) => {
                         if mode == Mode::Flat {
                             cmd.doc = left;
+                            continue;
+                        }
+
+                        // A multiline leaf cannot fail or change the suffix
+                        // queue. Its cached widths decide the entire branch,
+                        // so selecting it needs no speculative output buffer.
+                        if let Doc::MultilineText(data) = &**left {
+                            let fits_multiline = self
+                                .column
+                                .fits_multiline(data.metrics(), self.options.width);
+                            cmd.doc = if fits_multiline { left } else { right };
                             continue;
                         }
 
@@ -489,6 +551,24 @@ where
                             return false;
                         }
                         break;
+                    }
+
+                    Doc::MultilineText(data) => {
+                        // Embedded breaks cannot fit flat; an explicit `flat_alt`
+                        // supplies another representation.
+                        if mode == Mode::Flat {
+                            return false;
+                        }
+                        // Only the first line is measured: the break that ends
+                        // it is the first break of the node, and the measurement
+                        // stops there (the partial_union contract). The break
+                        // writes no generated whitespace of its own, so nothing
+                        // more can overflow.
+                        let metrics = data.metrics();
+                        if metrics.first_nonempty {
+                            column.commit_content(metrics.first_width);
+                        }
+                        return !metrics.first_nonempty || column.within(self.options.width);
                     }
 
                     // A suppressed break cannot end the fit check: following

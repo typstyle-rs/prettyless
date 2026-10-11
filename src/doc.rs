@@ -1,8 +1,8 @@
 use std::{borrow::Cow, fmt, ops::Deref, rc::Rc};
 
 use crate::{
-    BoxAllocator, DocAllocator, DocBuilder, Pretty, RcAllocator, text::Text,
-    visitor::visit_sequence_deep,
+    BoxAllocator, DocAllocator, DocBuilder, Pretty, RcAllocator, text::MultilineTextData,
+    text::Text, visitor::visit_sequence_deep,
 };
 
 pub trait DocPtr<'a>: Deref<Target = Doc<'a, Self>> + Sized {
@@ -42,6 +42,21 @@ where
     // Texts
     Text(Text<'a>),
     TextWithLen(usize, T), // Stores the length of a string document that is not just ascii
+    /// Multi-line text with fixed line breaks: see
+    /// [`DocAllocator::multiline_text`](crate::DocAllocator::multiline_text).
+    ///
+    /// The first line starts at the current position like any text. Every break
+    /// found in the input is emitted verbatim, and the line after it acts as if
+    /// dedented to the root: only the indentation present in the input
+    /// positions it, the column restarts at zero with no pending generated
+    /// indentation, and pending line suffixes stay queued until the next
+    /// structural break or the end of rendering. [`crate::RenderOptions::line_ending`]
+    /// applies only to structural breaks, not to the payload's own terminators.
+    ///
+    /// The node cannot be laid out flat: a group around it always breaks and
+    /// forcing it flat fails rendering. The boxed payload keeps the ordinary
+    /// document variants small.
+    MultilineText(Box<MultilineTextData<'a>>),
 
     // Whitespace and lines
     /// A deferred space, omitted at the start of a line and normally at its end.
@@ -123,6 +138,12 @@ where
         T::ALLOCATOR.text(data).into_plain_doc()
     }
 
+    /// The given multi-line text; see [`DocAllocator::multiline_text`].
+    #[inline]
+    pub fn multiline_text<U: Into<Cow<'a, str>>>(data: U) -> Self {
+        T::ALLOCATOR.multiline_text(data).into_plain_doc()
+    }
+
     fn flat_alt<D>(self, doc: D) -> Self
     where
         D: Pretty<'a, T::Allocator>,
@@ -168,6 +189,10 @@ where
             Doc::WeakLine => f.write_str("WeakLine"),
             Doc::TextWithLen(_, d) => d.fmt(f),
             Doc::Text(s) => s.fmt(f),
+            Doc::MultilineText(data) => f
+                .debug_tuple("MultilineText")
+                .field(&data.as_str())
+                .finish(),
 
             Doc::Append(..) => {
                 let mut f = f.debug_list();
@@ -306,6 +331,12 @@ macro_rules! impl_doc {
             #[inline]
             pub fn text<U: Into<Cow<'a, str>>>(data: U) -> Self {
                 $allocator.text(data).into_doc()
+            }
+
+            /// The given multi-line text; see [DocAllocator::multiline_text].
+            #[inline]
+            pub fn multiline_text<U: Into<Cow<'a, str>>>(data: U) -> Self {
+                $allocator.multiline_text(data).into_doc()
             }
 
             #[inline]
@@ -541,6 +572,12 @@ where
     #[inline]
     pub fn text<U: Into<Cow<'a, str>>>(data: U) -> Self {
         T::ALLOCATOR.text(data).1
+    }
+
+    /// The given multi-line text; see [`DocAllocator::multiline_text`].
+    #[inline]
+    pub fn multiline_text<U: Into<Cow<'a, str>>>(data: U) -> Self {
+        T::ALLOCATOR.multiline_text(data).1
     }
 
     fn flat_alt<D>(self, doc: D) -> Self

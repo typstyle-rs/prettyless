@@ -223,6 +223,39 @@ where
     }
 }
 
+/// Renders a multi-line string as a document, like
+/// [`DocAllocator::multiline_text`](crate::DocAllocator::multiline_text).
+///
+/// Strings implement [`Pretty`](crate::Pretty) as plain text and never break on
+/// their line breaks, so multi-line interpretation is explicit:
+///
+/// ```
+/// use prettyless::combinators::*;
+/// use prettyless::{Arena, DocAllocator};
+///
+/// let arena = Arena::new();
+/// let doc = arena.pretty(multiline_text("one\n  two"));
+/// assert_eq!(doc.print(80).to_string(), "one\n  two");
+/// ```
+#[inline]
+pub const fn multiline_text<S>(text: S) -> MultilineText<S> {
+    MultilineText(text)
+}
+
+/// Wrapper returned by [`multiline_text`].
+#[derive(Clone, Debug)]
+pub struct MultilineText<S>(S);
+
+impl<'a, D, S> Pretty<'a, D> for MultilineText<S>
+where
+    D: ?Sized + DocAllocator<'a>,
+    S: Into<std::borrow::Cow<'a, str>>,
+{
+    fn pretty(self, allocator: &'a D) -> DocBuilder<'a, D> {
+        allocator.multiline_text(self.0)
+    }
+}
+
 token_combinator!(
     /// Forces the parent group to break.
     expand_parent, ExpandParent, expand_parent

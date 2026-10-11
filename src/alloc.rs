@@ -1,6 +1,9 @@
 use std::{borrow::Cow, fmt};
 
-use crate::{BuildDoc, Doc, DocBuilder, DocPtr, Pretty, RefDoc, text::Text};
+use crate::{
+    BuildDoc, Doc, DocBuilder, DocPtr, Pretty, RefDoc,
+    text::{MultilineTextData, Text},
+};
 
 /// The `DocAllocator` trait abstracts over a type which can allocate (pointers to) `Doc`.
 pub trait DocAllocator<'a> {
@@ -188,6 +191,79 @@ pub trait DocAllocator<'a> {
         let data: Cow<_> = data.into();
         debug_assert!(data.is_ascii(), "Input to `ascii_text` should be ASCII");
         DocBuilder(self, Doc::Text(data.into()).into())
+    }
+
+    /// Allocate a document containing the given multi-line text.
+    ///
+    /// Unlike [`text`](DocAllocator::text), which assumes no line breaks, this
+    /// constructor interprets them: every break in the input (`"\n"`, `"\r\n"`
+    /// or a lone `"\r"`, counting `"\r\n"` once) becomes a fixed break that
+    /// renders as its original bytes. Every line participates in width checks,
+    /// so an overflowing line can reject a union branch. Empty input yields
+    /// [`nil`](DocAllocator::nil) and input without breaks is equivalent to
+    /// [`text`](DocAllocator::text), keeping multiline interpretation explicit.
+    ///
+    /// Layout contract:
+    ///
+    /// * Spaces, tabs and terminators are preserved verbatim: nothing is
+    ///   trimmed, dedented, reflowed or normalized.
+    ///   [`RenderOptions::line_ending`](crate::RenderOptions::line_ending)
+    ///   applies only to structural breaks outside the payload.
+    /// * The first line starts at the current position, without a leading
+    ///   break. Nesting around the node affects only its first line: lines
+    ///   after an embedded break act as if dedented to the root, so only the
+    ///   indentation present in the input positions them.
+    /// * An embedded break — including one at the end of the input — restarts
+    ///   the column at zero with no pending generated indentation, under either
+    ///   [`indentation policy`](crate::IndentationPolicy). The document
+    ///   following a terminal break therefore continues at column zero.
+    /// * Line suffixes stay queued across embedded breaks and flush at the next
+    ///   structural break or at the end of rendering, never inside the payload.
+    /// * Blank lines keep their count and stay empty; weak whitespace resets at
+    ///   each break.
+    /// * Each line is measured with the text width rules. A group containing
+    ///   the node cannot fit flat; use [`flat_alt`](DocBuilder::flat_alt) for a
+    ///   flat representation. [`union`](DocBuilder::union) alternatives are
+    ///   measured over every line and [`partial_union`](DocBuilder::partial_union)
+    ///   only through the first break.
+    ///
+    /// ```
+    /// use prettyless::{Arena, DocAllocator};
+    ///
+    /// let arena = Arena::new();
+    /// let doc = arena.text("key: ") + arena.multiline_text("one\n  two");
+    /// assert_eq!(doc.print(80).to_string(), "key: one\n  two");
+    ///
+    /// // Input terminators are preserved byte for byte.
+    /// let doc = arena.multiline_text("a\r\n\nb\n");
+    /// assert_eq!(doc.print(80).to_string(), "a\r\n\nb\n");
+    /// ```
+    ///
+    /// The embedded breaks force every group around the node to break. A line
+    /// suffix queued around the node stays queued until the next structural
+    /// break or the end of rendering, so it never lands inside a string
+    /// literal:
+    ///
+    /// ```
+    /// use prettyless::{Arena, DocAllocator};
+    ///
+    /// let arena = Arena::new();
+    /// let doc = arena.line_suffix(" // 1") + arena.multiline_text("\"b\nc\"");
+    /// assert_eq!(doc.print(80).to_string(), "\"b\nc\" // 1");
+    /// ```
+    #[inline]
+    fn multiline_text<U: Into<Cow<'a, str>>>(&'a self, data: U) -> DocBuilder<'a, Self> {
+        let data: Cow<_> = data.into();
+        if data.is_empty() {
+            return self.nil();
+        }
+        if !data.contains('\n') && !data.contains('\r') {
+            return self.text(data);
+        }
+        DocBuilder(
+            self,
+            Doc::MultilineText(Box::new(MultilineTextData::new(data.into()))).into(),
+        )
     }
 
     /// Allocate a document containing n spaces.
