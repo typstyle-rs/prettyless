@@ -2,7 +2,7 @@ use crate::{Doc, DocPtr, Render, visitor::visit_sequence_rev};
 
 use super::{
     IndentationPolicy, RenderOptions,
-    write::{BufferWrite, write_spaces},
+    write::{BufferWrite, DirectWrite, PrintWrite, write_spaces},
 };
 
 pub fn print_doc<'a, W, T>(
@@ -29,7 +29,7 @@ where
         #[cfg(feature = "contextual")]
         temp_arena: &typed_arena::Arena::new(),
     }
-    .print_to(out, PrintState::default())?;
+    .print_to(&mut DirectWrite::new(out), PrintState::default())?;
 
     Ok(())
 }
@@ -169,7 +169,7 @@ where
 {
     fn print_to<W>(&mut self, out: &mut W, state: PrintState) -> Result<bool, W::Error>
     where
-        W: ?Sized + Render,
+        W: ?Sized + PrintWrite,
     {
         let PrintState {
             cmd_top: top,
@@ -309,7 +309,7 @@ where
 
                         if fits {
                             self.compact_suffixes();
-                            buffer.render(out)?;
+                            out.write_buffer(buffer)?;
                             break;
                         } else {
                             // Discard branch commands and newly queued suffixes,

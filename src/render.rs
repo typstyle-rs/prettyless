@@ -312,4 +312,81 @@ mod tests {
         assert_eq!(doc.render_raw(300, &mut out), Ok(()));
         assert_eq!(out.written, format!("a\n{}b c", " ".repeat(205)));
     }
+
+    #[test]
+    fn nested_unions_transfer_accepted_buffers() {
+        let a = Arena::new();
+        let inner = (a.text("inner") + a.line_suffix(" // s")).union(a.text("inner fallback"));
+
+        // An empty parent buffer takes ownership of the accepted inner output.
+        let nested = inner.clone().union(a.text("outer fallback"));
+        assert_eq!(nested.print(80).to_string(), "inner // s");
+
+        // A nonempty parent buffer appends the accepted inner output in order.
+        let nested = (a.text("p") + inner.clone()).union(a.text("outer fallback"));
+        assert_eq!(nested.print(80).to_string(), "pinner // s");
+
+        // Deep nesting hands the same bytes up one level at a time.
+        let mut doc = a.text("core");
+        for _ in 0..8 {
+            doc = doc.clone().union(a.text("unused"));
+        }
+        assert_eq!(doc.print(80).to_string(), "core");
+    }
+
+    #[test]
+    fn rollback_discards_accepted_branch_output_and_suffixes() {
+        let a = Arena::new();
+        let inner = (a.text("inner") + a.line_suffix(" // s")).union(a.text("inner fallback"));
+        // The outer branch accepts the inner union and then overflows: the
+        // transferred output and the inner suffix are discarded with it, while
+        // a suffix queued by the caller survives.
+        let rejected = (inner + a.text(" long overflow")).union(a.text("outer fallback"));
+        let doc = a.line_suffix(" // caller") + rejected;
+        assert_eq!(doc.print(10).to_string(), "outer fallback // caller");
+    }
+
+    #[test]
+    fn accepted_union_buffer_respects_partial_writes_and_sink_errors() {
+        struct LimitedWriter {
+            written: String,
+            limit: usize,
+        }
+
+        impl Render for LimitedWriter {
+            type Error = WroteWrong;
+
+            fn write_str(&mut self, s: &str) -> Result<usize, Self::Error> {
+                if self.written.len() >= self.limit {
+                    return Err(WroteWrong);
+                }
+                let len = s.chars().next().map_or(0, char::len_utf8);
+                self.written.push_str(&s[..len]);
+                Ok(len)
+            }
+
+            fn fail_doc(&self) -> Self::Error {
+                WroteWrong
+            }
+        }
+
+        let a = Arena::new();
+        let doc = (a.text("你好") + a.line_suffix("!")).union(a.text("fallback"));
+
+        // The accepted branch is committed through `write_str_all`, so a
+        // partial sink assembles it across chunks.
+        let mut out = CharAtATime::default();
+        assert_eq!(doc.render_raw(80, &mut out), Ok(()));
+        assert_eq!(out.written, "你好!");
+
+        // A sink error while committing the accepted branch propagates without
+        // rendering the fallback.
+        let doc = (a.text("abcd") + a.line_suffix("!")).union(a.text("fallback"));
+        let mut out = LimitedWriter {
+            written: String::new(),
+            limit: 2,
+        };
+        assert_eq!(doc.render_raw(80, &mut out), Err(WroteWrong));
+        assert_eq!(out.written, "ab");
+    }
 }
